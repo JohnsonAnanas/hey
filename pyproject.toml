@@ -1,0 +1,10 @@
+[project]
+name = "arb"
+version = "0.0.1"
+description = "Observatoire d'arbitrage crypto/DeFi — mesure avant exécution ; brut ≠ net ; identité d'actif certifiée avant tout calcul."
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+# Dépôt dédié : ne collecter QUE arb/tests/ (math AMM / pricing / fraîcheur RPC / validation pool /
+# identité d'actif). rootdir = arb/ -> la suite tourne à l'identique une fois le dépôt cloné seul.
+testpaths = ["tests"]

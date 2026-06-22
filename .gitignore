@@ -1,0 +1,33 @@
+# arb/ — observatoire d'arbitrage crypto (dépôt DÉDIÉ et privé).
+# Suivis : code, tests, docs, quarantaines, manifestes, config non sensible.
+# Exclus : secrets, venv, caches, données brutes lourdes.
+
+# Environnement / caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Secrets — JAMAIS committer
+.env
+*.key
+*.pem
+*.keystore
+
+# Données brutes lourdes (régénérables ; licences) — EXCLUES,
+# SAUF les notes de quarantaine, qui EXPLIQUENT pourquoi une donnée est invalide.
+data/**
+!data/**/
+!data/**/QUARANTINE.md
+
+# Types lourds, où qu'ils soient (les manifestes sont en .json/.md -> suivis)
+*.csv
+*.parquet
+*.pdf
+
+# OS / éditeurs
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
