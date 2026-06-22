@@ -44,7 +44,9 @@ def git_hash() -> str:
 
 
 def git_dirty() -> bool:
-    return bool(_git("status", "--porcelain"))
+    # Seules les modifs du CODE SUIVI comptent : un output non suivi (le manifeste lui-même, des
+    # données) ne rend pas le hash non représentatif du code.
+    return bool(_git("status", "--porcelain", "--untracked-files=no"))
 
 
 def sha256_file(path: str) -> dict:
