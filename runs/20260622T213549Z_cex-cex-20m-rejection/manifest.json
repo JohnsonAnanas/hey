@@ -1,0 +1,24 @@
+{
+  "slug": "cex-cex-20m-rejection",
+  "created_utc": "2026-06-22T21:35:49Z",
+  "git_hash": "84fa6419f316464477a98d5fb5bae47253a0e47f",
+  "git_dirty": false,
+  "hypothesis": "Les ~20M USD 'extractibles' CEX<->CEX (cex_monitor.csv) sont-ils un vrai profit capturable ?",
+  "command": "audit d'identité a posteriori sur data/logs/cex_monitor.csv (run cex_monitor.py historique, pré-garde)",
+  "period": "2026-06-15..2026-06-22",
+  "sources": [
+    "ccxt fetch_order_book binance/okx/htx (paires /USDT)"
+  ],
+  "inputs": [
+    {
+      "path": "data/logs/cex_monitor.csv",
+      "sha256": "1083814fbefd18b01ac006992366fabfffb34d2e759562c88b83a28622afbd7b",
+      "bytes": 164667
+    }
+  ],
+  "universe": "91 coins /USDT, vol24h>=1M sur >=2 venues, transferts OUVERTS",
+  "assumed_costs": "taker 10bps x2 (frais trading seuls ; pas de transfert/inventaire/latence)",
+  "result": "Artefact d'identité par ticker : HYPE profitable dans les 2 sens (20.62M et 20.60M USD) a 0.3-5.6 bps ; 3352/3363 lignes >= 1M USD ; 22 coins vus 2-sens. Falsifie par directional_inconsistency + implausible_magnitude.",
+  "verdict": "REJETE",
+  "notes": "Motive le fix sim/identity.py + la quarantaine data/logs/QUARANTINE.md. Le net_bps (tickers) restait sain ; c'est extract_usd (walk de carnet sur identite fausse) qui explosait."
+}
