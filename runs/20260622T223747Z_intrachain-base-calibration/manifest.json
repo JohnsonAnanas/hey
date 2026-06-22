@@ -1,0 +1,25 @@
+{
+  "slug": "intrachain-base-calibration",
+  "created_utc": "2026-06-22T22:37:47Z",
+  "git_hash": "9fdc34e06840c91ad6af698ec0cb66f49e462bbb",
+  "git_dirty": false,
+  "hypothesis": "Le moteur de route intra-chaine surface-t-il des dislocations v2-v2 net-positives et persistantes sur Base (univers de calibration) ?",
+  "command": "python scan_dex_intrachain.py --seconds 40 --min-usd 50000 --gas-units 300000",
+  "period": "blocs 47689240..47689260 (live 2026-06-23)",
+  "sources": [
+    "Base RPC public (sim/chain RPC garde, same-block Multicall3)",
+    "factories UniV2/Sushi/BaseSwap/Aerodrome + v3 UniV3/Panc"
+  ],
+  "inputs": [
+    {
+      "path": "config\\universe_base.json",
+      "sha256": "bb317b1eb0f1423c4fbe26ec7ed9c956a4371eb42f4737a57d84ebb2eaea9f36",
+      "bytes": 1342
+    }
+  ],
+  "universe": "5 tokens certifies (config v1) ; 9 paires routables",
+  "assumed_costs": "frais pool on-chain ; gas 300000 u @ block ; taille optimale entiere ; marge statut $5",
+  "result": "9 blocs ; routes 639 ; A_OBSERVER 0 ; FORWARD 0 ; rejets v3=630",
+  "verdict": "NON_CONCLUANT",
+  "notes": "CALIBRATION du moteur. Resultat vide/court = couverture & liquidite v2 sur Base (v3 ABSTENU faute de quoter, fenetre courte), PAS une absence d'alpha DeFi. v3 = grosse part de la liquidite Base -> a instrumenter (quoter) avant toute conclusion."
+}
