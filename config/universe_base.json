@@ -1,0 +1,30 @@
+{
+  "_note": "Univers de CALIBRATION du moteur de route (Phase B). PAS une conclusion sur l'existence/absence d'alpha DeFi : un univers pour valider le moteur. Identifiant = ADRESSE (jamais le ticker, cf contrat #6). Décimales RE-VÉRIFIÉES on-chain au run (abstention si écart).",
+  "chain": "base",
+  "chain_id": 8453,
+  "version": 1,
+  "verified_utc": "2026-06-23",
+  "provenance": "Adresses réutilisées depuis arb/run_mav_multi.py (panier déjà en service, pools résolus via factory) ; décimales canoniques re-vérifiées on-chain (SEL_DECIMALS) à chaque run.",
+  "tokens": {
+    "0x4200000000000000000000000000000000000006": {
+      "symbol": "WETH", "decimals": 18,
+      "source": "Base canonical WETH (predeploy 0x42..0006)"
+    },
+    "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": {
+      "symbol": "USDC", "decimals": 6,
+      "source": "Circle native USDC sur Base"
+    },
+    "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22": {
+      "symbol": "cbETH", "decimals": 18,
+      "source": "Coinbase Wrapped Staked ETH sur Base"
+    },
+    "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf": {
+      "symbol": "cbBTC", "decimals": 8,
+      "source": "Coinbase Wrapped BTC sur Base"
+    },
+    "0x940181a94a35a4569e4529a3cdfb74e38fd98631": {
+      "symbol": "AERO", "decimals": 18,
+      "source": "Aerodrome token sur Base"
+    }
+  }
+}

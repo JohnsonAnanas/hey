@@ -122,6 +122,28 @@ def to_md(m: dict) -> str:
 """
 
 
+def persist(m: dict) -> str:
+    """Ecrit manifest.json + manifest.md sous runs/<UTC>_<slug>/ et renvoie le dossier."""
+    stamp = m["created_utc"].replace(":", "").replace("-", "")
+    run_dir = os.path.join(HERE, "runs", f"{stamp}_{m['slug']}")
+    os.makedirs(run_dir, exist_ok=True)
+    with open(os.path.join(run_dir, "manifest.json"), "w", encoding="utf-8") as fh:
+        json.dump(m, fh, ensure_ascii=False, indent=2)
+    with open(os.path.join(run_dir, "manifest.md"), "w", encoding="utf-8") as fh:
+        fh.write(to_md(m))
+    return run_dir
+
+
+def write_manifest(*, slug, hypothesis, command, period, sources, inputs, universe, costs,
+                   result, verdict, notes="") -> tuple[str, dict]:
+    """API programmatique (runner) : construit + ecrit le manifeste. Renvoie (run_dir, manifest)."""
+    from argparse import Namespace
+    m = build(Namespace(slug=slug, hypothesis=hypothesis, command=command, period=period,
+                        source=list(sources), input=list(inputs), universe=universe,
+                        costs=costs, result=result, verdict=verdict, notes=notes))
+    return persist(m), m
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Manifeste de run OBLIGATOIRE (donnée<->conclusion<->code).")
     ap.add_argument("--slug", required=True, help="identifiant court kebab-case")
@@ -138,13 +160,7 @@ def main() -> int:
     args = ap.parse_args()
 
     m = build(args)
-    stamp = m["created_utc"].replace(":", "").replace("-", "")
-    run_dir = os.path.join(HERE, "runs", f"{stamp}_{m['slug']}")
-    os.makedirs(run_dir, exist_ok=True)
-    with open(os.path.join(run_dir, "manifest.json"), "w", encoding="utf-8") as fh:
-        json.dump(m, fh, ensure_ascii=False, indent=2)
-    with open(os.path.join(run_dir, "manifest.md"), "w", encoding="utf-8") as fh:
-        fh.write(to_md(m))
+    run_dir = persist(m)
     flag = "  (⚠️ arbre SALE)" if m["git_dirty"] else ""
     print(f"Manifeste écrit -> {os.path.relpath(run_dir, HERE)}/  (verdict {m['verdict']}, git {m['git_hash'][:10]}){flag}")
     return 0
