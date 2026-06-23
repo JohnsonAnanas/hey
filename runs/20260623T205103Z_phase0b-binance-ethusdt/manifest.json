@@ -1,0 +1,68 @@
+{
+  "phase": "PHASE0B",
+  "source_donnees": "Binance-USDM",
+  "symbol": "ETHUSDT",
+  "window": {
+    "start_utc": "2025-06-23T00:00:00Z",
+    "end_utc": "2026-06-23T00:00:00Z"
+  },
+  "created_utc": "2026-06-23T20:51:04Z",
+  "git_hash": "89284681d0aa63fe88970c46096c20e836c72c3a",
+  "runner_path": "phase0b_binance_funding.py",
+  "runner_sha256": "2d3c3cdccffca6215dd8dc421bfc2796ffc829a45bda5fd0668c43763624b895",
+  "runner_tracked": true,
+  "runner_status": "clean",
+  "code_versioned": true,
+  "git_dirty": false,
+  "authorization": "Phase 0B autorisee (2026-06-23) : Binance/ETHUSDT, public, borne ; metadonnees necessaires + UNE sonde historique startTime/endTime ; AUCUNE pagination/backfill/agregation/PnL/choix de strategie. Pivot DONNEES, pas venue de trading.",
+  "calls_count": 2,
+  "receipts": [
+    {
+      "name": "funding_info_A3",
+      "url": "https://fapi.binance.com/fapi/v1/fundingInfo",
+      "request_utc": "2026-06-23T20:51:03Z",
+      "http_status": 200,
+      "bytes": 115547,
+      "sha256": "7e04737b2a891e3c94b6fb238d2ea7b29f9bb7a69f03b5d3030cc0a69c43f058",
+      "raw_path": "data/raw/funding/binance/phase0b/funding_info_A3_20260623T205103Z.json"
+    },
+    {
+      "name": "funding_history_probe_A4",
+      "url": "https://fapi.binance.com/fapi/v1/fundingRate?symbol=ETHUSDT&startTime=1750636800000&endTime=1750809600000&limit=10",
+      "request_utc": "2026-06-23T20:51:03Z",
+      "http_status": 200,
+      "bytes": 626,
+      "sha256": "13216fe2eded4bc6379b2182ca83272c5b2dacaafe1bb3e17c97903dc507ffc3",
+      "raw_path": "data/raw/funding/binance/phase0b/funding_history_probe_A4_20260623T205103Z.json"
+    }
+  ],
+  "a3_params_recus": {
+    "funding_info": {
+      "symbol": "ETHUSDT",
+      "adjustedFundingRateCap": "0.00300",
+      "adjustedFundingRateFloor": "-0.00300",
+      "fundingIntervalHours": 8,
+      "disclaimer": true
+    }
+  },
+  "a4_probe": {
+    "source": "Binance GET /fapi/v1/fundingRate",
+    "probe_param": "symbol=ETHUSDT&startTime=1750636800000(2025-06-23T00:00:00Z)&endTime=1750809600000(2025-06-25T00:00:00Z)&limit=10",
+    "window_start_utc": "2025-06-23T00:00:00Z",
+    "window_end_utc": "2026-06-23T00:00:00Z",
+    "records_returned": 6,
+    "fundingTimes_utc": [
+      "2025-06-23T00:00:00Z",
+      "2025-06-23T08:00:00Z",
+      "2025-06-23T16:00:00Z",
+      "2025-06-24T00:00:00Z",
+      "2025-06-24T08:00:00Z",
+      "2025-06-24T16:00:00Z"
+    ],
+    "covers_window_start": true
+  },
+  "critere_a4": "des reglements ETHUSDT proches du 2025-06-23 doivent etre retournes ; sinon NON CAPABLE",
+  "verdict": "SOURCE_CAPABLE",
+  "abstentions": [],
+  "note": "Recus de validation parametres/capacite UNIQUEMENT. PAS une serie certifiee, non agrege, ni calibration ni test, ni choix de venue de trading. OKX conserve NON CONCLUANT (non rejete). Phase 1 (backfill) INTERDITE sans nouvelle validation humaine."
+}
