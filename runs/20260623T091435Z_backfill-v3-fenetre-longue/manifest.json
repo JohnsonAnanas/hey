@@ -1,0 +1,205 @@
+{
+  "slug": "backfill-v3-fenetre-longue",
+  "created_utc": "2026-06-23T09:14:35Z",
+  "git_hash": "7fed31ca433336c5c7653065b6ca57ad3742411f",
+  "git_dirty": false,
+  "hypothesis": "Existe-t-il une route LENTE, NETTE, observable dans l'univers Base ÉLIGIBLE (ancre indépendante, ~WETH/USDC), sur cette fenêtre, à cadence horaire ? (Verdict SCOPÉ, jamais global.)",
+  "command": "python backfill_v3.py --days 14 --cadence-min 60 --start-block 47101032 --end-block 47705832 --l1-usd 0.02 --gas-margin-frac 0.5 --margin 5.0 --cap-min 200.0 --allow-forward",
+  "period": "blocs 47101032..47705832 (pas 1800, 337 demandés)",
+  "sources": [
+    "archive RPC Base : https://base-mainnet.g.alchemy.com/v2/***",
+    "QuoterV2 Uniswap v3 (quote exacte au bloc) + état v2 on-chain"
+  ],
+  "inputs": [
+    {
+      "path": "config\\universe_base.json",
+      "sha256": "bb317b1eb0f1423c4fbe26ec7ed9c956a4371eb42f4737a57d84ebb2eaea9f36",
+      "bytes": 1342
+    },
+    {
+      "path": "data\\logs\\backfill_v3_20260623_095012.csv",
+      "sha256": "db951ffca1f11638537f56b8c61944b219054fac2a44c3dff3511a050c0fa160",
+      "bytes": 2101870
+    }
+  ],
+  "universe": "5 certifiés ; UniV3 {500,3000} ; v3↔v3 & v3↔v2 ; grille [1000.0, 5000.0, 25000.0, 100000.0, 250000.0] ; éligibles=['USDC/AERO', 'USDC/cbBTC', 'WETH/AERO', 'WETH/USDC', 'WETH/cbBTC']",
+  "assumed_costs": "gas_estime_conservateur SÉPARÉ : exec (gasEstimate quoteur/forfait × baseFee) + L1-data $0.02 + marge 50% ; ancre USD indépendante au bloc",
+  "result": "ÉLIGIBLE 42161 routes ; PnL>0 [MEV_RACE 0, COURT 0, A_OBS 0, FWD 0] ; abst.sans-ancre 17435 ; reverts 11086 ; sha256(sortie)=db951ffca1f11638",
+  "verdict": "REJETE",
+  "notes": "Verdict SCOPÉ à l'univers ÉLIGIBLE (ancre indépendante) ; cbETH/cbBTC/AERO NON testés. Borne SUPÉRIEURE (réserves+simulation, ni intra-bloc ni MEV). Détails structurés -> m['details'] (périmètre, abstentions, reverts ventilés, routes par paire/type, params gelés). JAMAIS 'pas d'alpha DeFi'.",
+  "details": {
+    "perimetre_eligible": {
+      "definition": "routes avec ANCRE USD INDÉPENDANTE au bloc (token0 ∈ {WETH, stable}). Les autres NON testées.",
+      "routes_evaluees": 42161,
+      "paires": [
+        "USDC/AERO",
+        "USDC/cbBTC",
+        "WETH/AERO",
+        "WETH/USDC",
+        "WETH/cbBTC"
+      ],
+      "par_paire_et_type": {
+        "USDC/AERO|v2v2": 1902,
+        "USDC/AERO|v3v2": 5072,
+        "USDC/AERO|v3v3": 1902,
+        "USDC/cbBTC|v2v2": 951,
+        "USDC/cbBTC|v3v2": 3804,
+        "USDC/cbBTC|v3v3": 1902,
+        "WETH/AERO|v2v2": 1902,
+        "WETH/AERO|v3v2": 5072,
+        "WETH/AERO|v3v3": 1902,
+        "WETH/USDC|v2v2": 1902,
+        "WETH/USDC|v3v2": 5072,
+        "WETH/USDC|v3v3": 1902,
+        "WETH/cbBTC|v2v2": 1902,
+        "WETH/cbBTC|v3v2": 5072,
+        "WETH/cbBTC|v3v3": 1902
+      }
+    },
+    "abstentions_sans_ancre": {
+      "actifs_non_testes": {
+        "cbETH": 16484,
+        "AERO": 951
+      },
+      "total_routes": 17435
+    },
+    "reverts_ventiles": {
+      "par_cause": {
+        "pool_absent_au_bloc": 0,
+        "size_unfillable_quote": 11086
+      },
+      "par_taille": {
+        "1000": 5540,
+        "25000": 1
+      },
+      "par_pool_top": [
+        {
+          "pair": "WETH/AERO",
+          "venue": "UniV3-5",
+          "fee_tier": 500,
+          "reverts": 3802
+        },
+        {
+          "pair": "USDC/AERO",
+          "venue": "PancV3-25",
+          "fee_tier": 2500,
+          "reverts": 3171
+        },
+        {
+          "pair": "WETH/AERO",
+          "venue": "PancV3-5",
+          "fee_tier": 500,
+          "reverts": 1447
+        },
+        {
+          "pair": "WETH/AERO",
+          "venue": "PancV3-25",
+          "fee_tier": 2500,
+          "reverts": 1253
+        },
+        {
+          "pair": "WETH/cbBTC",
+          "venue": "PancV3-25",
+          "fee_tier": 2500,
+          "reverts": 882
+        },
+        {
+          "pair": "USDC/cbBTC",
+          "venue": "PancV3-25",
+          "fee_tier": 2500,
+          "reverts": 444
+        },
+        {
+          "pair": "USDC/AERO",
+          "venue": "PancV3-5",
+          "fee_tier": 500,
+          "reverts": 24
+        },
+        {
+          "pair": "USDC/AERO",
+          "venue": "UniV3-30",
+          "fee_tier": 3000,
+          "reverts": 22
+        },
+        {
+          "pair": "USDC/AERO",
+          "venue": "UniV3-5",
+          "fee_tier": 500,
+          "reverts": 18
+        },
+        {
+          "pair": "WETH/AERO",
+          "venue": "UniV3-30",
+          "fee_tier": 3000,
+          "reverts": 8
+        },
+        {
+          "pair": "USDC/cbBTC",
+          "venue": "UniV3-5",
+          "fee_tier": 500,
+          "reverts": 4
+        },
+        {
+          "pair": "USDC/cbBTC",
+          "venue": "UniV3-30",
+          "fee_tier": 3000,
+          "reverts": 4
+        },
+        {
+          "pair": "USDC/cbBTC",
+          "venue": "PancV3-5",
+          "fee_tier": 500,
+          "reverts": 4
+        },
+        {
+          "pair": "WETH/cbBTC",
+          "venue": "PancV3-5",
+          "fee_tier": 500,
+          "reverts": 2
+        },
+        {
+          "pair": "WETH/cbBTC",
+          "venue": "UniV3-30",
+          "fee_tier": 3000,
+          "reverts": 1
+        }
+      ]
+    },
+    "statuts_eligibles": {},
+    "params_geles": {
+      "start_block": 47101032,
+      "end_block": 47705832,
+      "step_blocks": 1800,
+      "blocs_demandes": 337,
+      "univers": [
+        "AERO",
+        "USDC",
+        "WETH",
+        "cbBTC",
+        "cbETH"
+      ],
+      "fee_tiers": [
+        500,
+        3000
+      ],
+      "grille_usd": [
+        1000.0,
+        5000.0,
+        25000.0,
+        100000.0,
+        250000.0
+      ],
+      "taille_fixe_usd": 25000.0,
+      "seuils": {
+        "persist_frac": 0.7,
+        "persist_streak": 3,
+        "marge_usd": 5.0,
+        "cap_min_usd": 200.0,
+        "l1_usd": 0.02,
+        "gas_margin_frac": 0.5
+      },
+      "allow_forward": true
+    },
+    "verdict_perimetre": "Hypothèse : « il existe une route LENTE, NETTE et observable dans l'univers Base ÉLIGIBLE (ancre indépendante, ~WETH/USDC), sur cette fenêtre, à cadence horaire ». Verdict = REJETE. cbETH/cbBTC/AERO NON testés (sans ancre). Borne SUPÉRIEURE (ne voit ni intra-bloc ni MEV). JAMAIS une conclusion globale sur l'existence d'alpha DeFi."
+  }
+}
