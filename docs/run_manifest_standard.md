@@ -22,14 +22,22 @@ persistance, évaluation de route…). Un run sans manifeste = un résultat **no
 | `universe` | humain | univers étudié (tokens, venues…) |
 | `assumed_costs` | humain | coûts supposés (frais, gas, slippage, capital immobilisé…) |
 | `result` | humain | résultat mesuré |
-| `verdict` | humain | **VALIDE / REJETE / NON_CONCLUANT** |
+| `verdict` | humain | un statut de la **taxonomie MISSION RESET** (ci-dessous) |
 
-## Verdict — trois valeurs, pas plus
-- **VALIDE** : l'hypothèse tient, **net de coûts**, sur la couverture mesurée.
-- **REJETE** : l'hypothèse est fausse / le signal est un artefact (ex. les $20M CEX↔CEX).
+## Verdict — taxonomie MISSION RESET (§2)
+`VALIDE` est **interdit** : jamais pour un triage, une médiane ou une quote isolée. Les statuts :
+- **INVALIDE** : artefact démontré (ex. les $20M CEX↔CEX = identité par ticker).
+- **REJETE** : hypothèse fausse / négative **net de coûts**, sur la couverture mesurée (souvent `REJETE_SCOPE`).
 - **NON_CONCLUANT** : couverture / puissance insuffisante pour trancher (à ré-observer).
+- **LEAD** : piste retenue (ex. triage, identité partielle) — **pas** un résultat économique.
+- **MECANISME_CONFIRME** : mécanisme de convergence prouvé (identité + route), avant tout PnL.
+- **QUOTE_POSITIVE** : une `QuotePair` nette positive à taille définie (niveau de preuve ≥ 2).
+- **PAPER_ELIGIBLE** : éligible au paper trading (rebalancing confirmé, série hors échantillon).
 
-Jamais « intéressant », « prometteur » : un manifeste **tranche** ou dit explicitement qu'il ne peut pas.
+Les niveaux positifs se gagnent **par paliers**, chacun avec artefacts (cf `EVIDENCE_LEDGER.md`,
+niveaux de preuve 0→6). Jamais « intéressant »/« prometteur » : un manifeste **tranche** ou dit
+explicitement qu'il ne peut pas. **Les manifests déjà écrits restent immuables** ; cette liste ne
+gouverne que les **nouveaux** runs (l'outil `manifest.py` la fait respecter).
 
 ## Usage
 ```bash

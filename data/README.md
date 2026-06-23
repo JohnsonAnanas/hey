@@ -5,6 +5,11 @@
 > **QUARANTAINE** (invalide, conservé pour re-test) · **MANIFESTE** (donnée↔conclusion↔code).
 > Règle d'or (leçon CBBTC) : un chiffre BRUT/INDICATIF doit être **confirmé en live/exécutable** avant
 > toute conclusion. Cf [`../docs/STATE.md`](../docs/STATE.md).
+>
+> **Lecture des colonnes (§3) :** *niveau de fiabilité* = la **section** (DÉRIVÉ FIABLE / BRUT /
+> QUARANTAINE) ; *producteur* = colonne « Produit par » ; *période* = dans le run/manifest qui a
+> produit le fichier (`runs/**`, champ `period`) ; *statut de la claim* = `../docs/EVIDENCE_LEDGER.md`
+> (un fichier de données n'est pas une conclusion — l'Evidence Ledger fait foi pour le verdict).
 
 ## DÉRIVÉ FIABLE — exact au bloc, reproductible (à privilégier pour conclure)
 | Fichier | Contenu | Produit par |

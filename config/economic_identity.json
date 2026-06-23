@@ -1,0 +1,79 @@
+{
+  "_note": "Registre d'identite ECONOMIQUE versionne (MISSION RESET Phase 3). Identifiant = ADRESSE (jamais ticker). Trois niveaux JAMAIS equivalents : CONTRACT_SAME (meme contrat prouvable) < ECONOMIC_IDENTITY_CONFIRMED (meme actif economique prouve, reçu) < REBALANCING_CONFIRMED (route de bridge/redemption reelle, cout/delai/limites). Charge/valide par sim/economic_identity.py. Aucune adresse devinee.",
+  "version": 1,
+  "verified_utc": "2026-06-23",
+  "assets": {
+    "ctm": {
+      "economic_asset_id": "ctm",
+      "project": "Continuum (CTM)",
+      "token_addresses": {
+        "bsc": "0xc8fb80fcc03f699c70ff0cc08c09106288888888",
+        "eth": "0xc8fb80fcc03f699c70ff0cc08c09106288888888"
+      },
+      "contract_verification_source": "deploiement deterministe : MEME adresse bsc et eth (spot_check.py ; data/collected/QUARANTINE.md)",
+      "bridge_route": "INCONNUE : aucune fonction OFT (oftVersion()/endpoint() revert sur bsc ET eth). L'absence d'OFT n'est PAS une preuve d'absence de TOUT bridge -> a chercher (registre tiers).",
+      "source_chain": "bsc",
+      "destination_chain": "eth",
+      "bridge_fee_bps": null,
+      "min_usd": null,
+      "max_usd": null,
+      "delay": "inconnu",
+      "limits": "inconnues",
+      "risks": "marches potentiellement segmentes (pas de bridge connu) ; gap large (~498 bps triage) mais peut-etre non deplacable",
+      "verified_utc": "2026-06-23",
+      "evidence_url": "on-chain: oftVersion()/endpoint() revert (bsc+eth)",
+      "evidence_hash": null,
+      "status": "CONTRACT_SAME",
+      "next_measure": "chercher un bridge/redemption tiers reel (absence d'OFT != absence de tout bridge) ; sinon rester CONTRACT_SAME (lead non renouvelable possible)",
+      "notes": "Reclasse depuis 'NON-BRIDGEABLE/REJETE' (STATE.md) vers CONTRACT_SAME + rebalancing INCONNU : meme adresse != identite economique prouvee, et le rejet final n'etait pas justifie (cf EVIDENCE_LEDGER)."
+    },
+    "cbbtc": {
+      "economic_asset_id": "cbbtc",
+      "project": "Coinbase Wrapped BTC (cbBTC)",
+      "token_addresses": {
+        "base": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+        "eth": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+      },
+      "contract_verification_source": "deploiement deterministe Coinbase : MEME adresse base et eth (config/universe_base.json ; STATE.md)",
+      "bridge_route": "redemption/wrap Coinbase (a documenter formellement avant tout passage inventory)",
+      "source_chain": "base",
+      "destination_chain": "eth",
+      "bridge_fee_bps": null,
+      "min_usd": null,
+      "max_usd": null,
+      "delay": "inconnu",
+      "limits": "inconnues",
+      "risks": "gap reel etroit (live ~7 bps, profond) -> le '154 bps' du triage etait un artefact de mediane",
+      "verified_utc": "2026-06-23",
+      "evidence_url": "verify_crosschain.py (live 7 bps, meme adresse) ; runs/...crosschain-triage",
+      "evidence_hash": null,
+      "status": "CONTRACT_SAME",
+      "next_measure": "documenter la route de redemption/wrap officielle (cout/delai/limites) avant d'envisager une recherche inventory",
+      "notes": "CONTRACT_SAME prouve par adresse. Economiquement REJETE_SCOPE (live 7 bps) cote PnL (cf EVIDENCE_LEDGER), mais l'identite de contrat reste un fait."
+    },
+    "velvet": {
+      "economic_asset_id": "velvet",
+      "project": "Velvet Capital (VELVET)",
+      "token_addresses": {
+        "base": "0xbf927b841994731c573bdf09ceb0c6b0aa887cdd",
+        "bsc": "0x8b194370825e37b33373e74a41009161808c1488"
+      },
+      "contract_verification_source": "adresses DIFFERENTES (base != bsc) ; identite economique affirmee via route LI.FI officielle (test live 2026-06-23)",
+      "bridge_route": "LI.FI (route officielle ayant servi au test $1k ; cout bridge ~3 bps mesure)",
+      "source_chain": "bsc",
+      "destination_chain": "base",
+      "bridge_fee_bps": 3,
+      "min_usd": null,
+      "max_usd": null,
+      "delay": "non archive (observe dans le test live)",
+      "limits": "non archivees",
+      "risks": "ecart d'EXECUTION reel >> gap mid (29 bps) -> aller-retour mesure -160 bps a $1k ; basis mean-reverting (std 71 bps) mais intradeable",
+      "verified_utc": "2026-06-23",
+      "evidence_url": "docs/STATE.md §1 (test LI.FI $1k) ; data/historical/settle_crosschain_velvet.csv",
+      "evidence_hash": null,
+      "status": "ECONOMIC_IDENTITY_CONFIRMED",
+      "next_measure": "ARCHIVER le reçu LI.FI (requete+reponse brutes + hash, manifest) pour figer l'identite ET promouvoir vers REBALANCING_CONFIRMED ; sans reçu hashe, l'identite reste PRELIMINAIRE",
+      "notes": "evidence_hash=null => statut PRELIMINAIRE par doctrine (§0). Trade REJETE_PRELIMINAIRE cote PnL (-160 bps, reçu non archive). Rebalancing observe fonctionnel (~3 bps) mais NON promu a REBALANCING_CONFIRMED faute de reçu archive."
+    }
+  }
+}

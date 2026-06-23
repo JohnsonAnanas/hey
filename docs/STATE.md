@@ -1,5 +1,11 @@
 # STATE — état honnête du projet `arb/` (audit, 2026-06-23)
 
+> ⚠️ **Photo HISTORIQUE (immuable).** Pour le **statut courant qui fait foi**, voir
+> [`EVIDENCE_LEDGER.md`](EVIDENCE_LEDGER.md) (taxonomie MISSION RESET, niveaux de preuve, audit des
+> reçus). Certaines conclusions ci-dessous y sont **reclassées** : VELVET → `REJETÉ_PRÉLIMINAIRE`
+> (reçu non archivé), CTM → `LEAD` (OFT absent ≠ pas de bridge), triage/calibration `VALIDE` → `LEAD`/
+> `NON_CONCLUANT`. Voir aussi [`DECISIONS.md`](DECISIONS.md) et [`MECHANISM_MAP.md`](MECHANISM_MAP.md).
+>
 > Photo de vérité, sans modifier la logique économique. À relire avant tout nouveau calcul.
 > **PnL net réellement positif mesuré à ce jour : AUCUN.**
 

@@ -6,7 +6,10 @@ Rempli AUTOMATIQUEMENT : hash Git (HEAD), arbre sale ?, horodatage UTC, sha256 d
 d'entree (la donnee brute n'est pas dans Git -- son EMPREINTE l'est, c'est elle qui fait foi).
 A FOURNIR : hypothese, commande+params, periode, sources, univers, couts supposes, resultat, verdict.
 
-Verdict : VALIDE / REJETE / NON_CONCLUANT (jamais "interessant" -- un verdict tranche). Cf
+Verdict (taxonomie MISSION RESET) : INVALIDE / REJETE / NON_CONCLUANT / LEAD / MECANISME_CONFIRME /
+QUOTE_POSITIVE / PAPER_ELIGIBLE (jamais "interessant" -- un verdict tranche). 'VALIDE' est INTERDIT
+(jamais pour un triage, une mediane ou une quote isolee, cf cahier des charges §2). Les manifests
+deja ecrits restent immuables ; cette liste ne gouverne que les NOUVEAUX runs. Cf
 docs/run_manifest_standard.md.
 
 Usage :
@@ -28,7 +31,12 @@ import subprocess
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERDICTS = ("VALIDE", "REJETE", "NON_CONCLUANT")
+# Taxonomie MISSION RESET (§2). 'VALIDE' est volontairement ABSENT : interdit pour un triage, une
+# mediane ou une quote isolee. Les niveaux "positifs" se gagnent par paliers (MECANISME_CONFIRME <
+# QUOTE_POSITIVE < PAPER_ELIGIBLE), chacun avec artefacts. Les manifests existants ne sont pas relus.
+VERDICTS = ("INVALIDE", "REJETE", "NON_CONCLUANT", "LEAD", "MECANISME_CONFIRME",
+            "QUOTE_POSITIVE", "PAPER_ELIGIBLE")
+FORBIDDEN_VERDICTS = ("VALIDE", "VALIDÉ")
 
 
 def _git(*args: str) -> str:
