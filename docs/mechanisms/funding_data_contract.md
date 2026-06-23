@@ -45,6 +45,12 @@ certifiable que s'il est **reconstructible depuis le brut certifié** (§6 doctr
 | `request_hash` / `response_hash` | Empreintes brutes | ✅ | Immuabilité (`manifest.py`) |
 | `completeness` | Gaps, halts, manquants **explicités** | ✅ | **Jamais de remplissage silencieux** (abstention) |
 
+- **Règle de sélection (anti-look-ahead).** Conserver les observations **par marché/venue** ;
+  **interdire toute sélection quotidienne a posteriori de la « meilleure » venue** (`max(exchange)`
+  choisi après coup = **enveloppe haute, diagnostic rétrospectif, jamais un PnL exécutable**). Une
+  **venue** ou une **règle de sélection** doit être **fixée avant la fenêtre de test**, sur **données
+  observables avant le règlement**.
+
 ### 2b. Métriques AGRÉGÉES — *dérivées du brut certifié, jamais l'inverse*
 
 | Métrique | Définition | Note |
@@ -102,14 +108,20 @@ L'ordre est strict ; **un seuil chiffré n'existe qu'à l'étape 3**, jamais ava
 |---|---|---|---|
 | **Provenance non documentée** | Colonnes `level_pct_an`, `p90_pct_an`, `breadth`, `n_assets` sans source, venues, settlement, méthode d'annualisation | On ne sait pas **ce qui est mesuré** ni comment | Venue(s), calendrier de settlement, convention de signe, méthode d'annualisation |
 | **Plafond suspect ~10,9 %** | Valeurs plafonnées (ex. `level=p90=10.95`) | Cap ou artefact → **distribution faussée** | Origine du plafond (cap exchange ? bug de calcul ?) |
-| **`breadth = 0`** | Colonne constante à 0 sur la série | Indicateur **cassé ou mal défini** → inexploitable | Définition de `breadth` et pourquoi elle est nulle |
+| **`breadth = 0`** | Métrique **définie mais dégénérée** dans cet agrégat : `breadth` = fraction d'actifs **au-dessus de 15 %/an** (`--hot 15`), **seuil jamais franchi** (funding ≤ ~10,9 %) | Ne permet **pas de caractériser des épisodes chauds** (constante à 0) | Recalibrer le seuil, ou ne pas l'utiliser comme mesure d'ampleur |
 | **Convention de signe absente** | Le signe du funding n'est pas énoncé | Un signe inversé inverse la thèse | Documenter + vérifier par venue |
 | **Non manifestée / non hashée** | Pas de manifeste ni de hash | **Non certifiée** (gate §5.1 échoue) | Manifester + hasher, ou produire une série certifiée |
+| **Sélection a posteriori de la venue** | `best_carry = max(exchange)` : la meilleure venue est choisie **après coup**, chaque jour | **Enveloppe haute / diagnostic rétrospectif** — jamais un PnL exécutable | Conserver les obs **par marché/venue** ; venue/règle **fixée avant le test** (données observables **avant le règlement**) |
+| **Brut absent du projet** | Obs par marché/venue calculées **en mémoire**, jamais écrites | Agrégat **non reconstructible** ; brut **ni archivé ni présent dans le projet** | Produire/archiver une série **brute** certifiée (§2a) |
 
-> **Conclusion honnête.** Tant que **provenance, plafond suspect et `breadth=0`** ne sont **pas expliqués
-> et résolus**, `funding_regime.csv` est **NON UTILISABLE pour décider** — ni pour **calibrer** une
-> règle, ni pour **tester**. C'est au mieux une **série indicative non certifiée** (cf `STATE.md §4`,
-> `EVIDENCE_LEDGER` : funding = `NON_CONCLUANT`). Aucune mesure ne doit s'y appuyer.
+> **Conclusion (enquête de provenance, 2026-06-23).** Producteur `funding_regime.py` (ccxt binance/okx,
+> panier de 22 coins) ; CSV **non suivi Git, sans manifeste** ; **brut par marché ni archivé ni présent
+> dans le projet** (calculé en mémoire, jamais écrit) ; `breadth=0` **expliqué** (fraction > 15 %/an,
+> jamais atteinte) ; plafond ~10,9 % **sans cap dans le code, invérifiable sans brut** ; surtout
+> `best_carry = max(exchange)` = **enveloppe haute a posteriori** (diagnostic rétrospectif, jamais un
+> PnL exécutable). → `funding_regime.csv` est **définitivement INDICATIF / NON UTILISABLE POUR DÉCIDER**.
+> **On ne le répare pas** : il faut **produire une nouvelle série certifiée** (§2a, brut par marché,
+> hashée). Cf `STATE.md §4`, `EVIDENCE_LEDGER` (funding = `NON_CONCLUANT`).
 
 ## 6. Gate de certification (rappel du mécanisme)
 
