@@ -1,0 +1,249 @@
+{
+  "slug": "crosschain-triage",
+  "created_utc": "2026-06-23T09:06:24Z",
+  "git_hash": "4e91247a473793dcb32768ee81ba8c952918fc22",
+  "git_dirty": false,
+  "hypothesis": "Quels tokens à IDENTITÉ PROUVÉE (même adresse) ont une vraie profondeur des DEUX côtés (liq + vol24h>0) ET un basis ≥ seuil — donc un candidat NON-mirage pour l'œil-inventaire ?",
+  "command": "python crosschain_triage.py --min-liq 100000 --min-vol 1000 --min-gap-bps 30",
+  "period": "fenêtre actuelle du collecteur (crosschain_obs.csv)",
+  "sources": [
+    "data/collected/crosschain_obs.csv (GeckoTerminal, prix/liq/vol agrégés)"
+  ],
+  "inputs": [
+    {
+      "path": "data\\collected\\crosschain_obs.csv",
+      "sha256": "c44ce204ebb59e799c2c77792f2b0e59c6fbbded67ab277ecdc62c4647e0fb4b",
+      "bytes": 1381371
+    }
+  ],
+  "universe": "327 tokens vus ; 3 à identité prouvée (≥2 chaînes)",
+  "assumed_costs": "aucun (crible liq/vol ; pas de quote exécutable — c'est la Phase 2)",
+  "result": "shortlist PROFOND 2 ; mirages écartés 0 ; watchlist registre 16",
+  "verdict": "VALIDE",
+  "notes": "Crible GROSSIER anti-mirage (liq/vol agrégés), pas un verdict éco. Identité PAR ADRESSE. Un basis qui survit ici doit ENCORE passer la profondeur exécutable on-chain (Phase 2). Les candidats à identité non prouvée (adresses ≠) exigent un registre de bridge officiel.",
+  "details": {
+    "shortlist_profond": [
+      {
+        "token": "CTM",
+        "gap_bps": 498.6,
+        "chaines": [
+          "eth",
+          "bsc"
+        ],
+        "min_liq_usd": 2141925,
+        "min_vol24h_usd": 3459608
+      },
+      {
+        "token": "CBBTC",
+        "gap_bps": 153.6,
+        "chaines": [
+          "arbitrum",
+          "base",
+          "eth"
+        ],
+        "min_liq_usd": 848655,
+        "min_vol24h_usd": 386953
+      }
+    ],
+    "mirages_ecartes": [],
+    "watchlist_registre": [
+      {
+        "token": "ARX",
+        "gap_bps": 53648194.9,
+        "lo": {
+          "chain": "base",
+          "addr": "0xcd1a1f37b89a4c15a98e0c01e7c162abeec30056"
+        },
+        "hi": {
+          "chain": "bsc",
+          "addr": "0x557a4756d2ef3217ce3a7c337998918f3d689129"
+        }
+      },
+      {
+        "token": "FUN",
+        "gap_bps": 89959.5,
+        "lo": {
+          "chain": "eth",
+          "addr": "0x419d0d8bdd9af5e606ae2232ed285aff190e711b"
+        },
+        "hi": {
+          "chain": "base",
+          "addr": "0x16ee7ecac70d1028e7712751e2ee6ba808a7dd92"
+        }
+      },
+      {
+        "token": "MSUSD",
+        "gap_bps": 30374.3,
+        "lo": {
+          "chain": "eth",
+          "addr": "0x4ba01f22827018b4772cd326c7627fb4956a7c00"
+        },
+        "hi": {
+          "chain": "optimism",
+          "addr": "0x9dabae7274d28a45f0b65bf8ed201a5731492ca0"
+        }
+      },
+      {
+        "token": "DMT",
+        "gap_bps": 808.1,
+        "lo": {
+          "chain": "eth",
+          "addr": "0x0b7f0e51cd1739d6c96982d55ad8fa634dd43a9c"
+        },
+        "hi": {
+          "chain": "arbitrum",
+          "addr": "0x8b0e6f19ee57089f7649a455d89d7bc6314d04e8"
+        }
+      },
+      {
+        "token": "UNI",
+        "gap_bps": 298.6,
+        "lo": {
+          "chain": "eth",
+          "addr": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984"
+        },
+        "hi": {
+          "chain": "arbitrum",
+          "addr": "0xfa7f8980b0f1e64a2062791cc3b0871572f1f7f0"
+        }
+      },
+      {
+        "token": "XAN",
+        "gap_bps": 259.0,
+        "lo": {
+          "chain": "bsc",
+          "addr": "0x7427bd9542e64d1ac207a540cfce194b7390a07f"
+        },
+        "hi": {
+          "chain": "eth",
+          "addr": "0xcedbea37c8872c4171259cdfd5255cb8923cf8e7"
+        }
+      },
+      {
+        "token": "BIO",
+        "gap_bps": 225.7,
+        "lo": {
+          "chain": "eth",
+          "addr": "0xcb1592591996765ec0efc1f92599a19767ee5ffa"
+        },
+        "hi": {
+          "chain": "base",
+          "addr": "0x226a2fa2556c48245e57cd1cba4c6c9e67077dd2"
+        }
+      },
+      {
+        "token": "WSTETH",
+        "gap_bps": 224.4,
+        "lo": {
+          "chain": "eth",
+          "addr": "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0"
+        },
+        "hi": {
+          "chain": "optimism",
+          "addr": "0x1f32b1c2345538c0c6f582fcb022739c4a194ebb"
+        }
+      },
+      {
+        "token": "RDNT",
+        "gap_bps": 205.8,
+        "lo": {
+          "chain": "arbitrum",
+          "addr": "0x3082cc23568ea640225c2467653db90e9250aaa0"
+        },
+        "hi": {
+          "chain": "bsc",
+          "addr": "0xf7de7e8a6bd59ed41a4b5fe50278b3b7f31384df"
+        }
+      },
+      {
+        "token": "SOL",
+        "gap_bps": 203.1,
+        "lo": {
+          "chain": "polygon_pos",
+          "addr": "0xd93f7e271cb87c23aaa73edc008a79646d1f9912"
+        },
+        "hi": {
+          "chain": "base",
+          "addr": "0x311935cd80b76769bf2ecc9d8ab7635b2139cf82"
+        }
+      },
+      {
+        "token": "PENDLE",
+        "gap_bps": 186.5,
+        "lo": {
+          "chain": "eth",
+          "addr": "0x808507121b80c02388fad14726482e061b8da827"
+        },
+        "hi": {
+          "chain": "arbitrum",
+          "addr": "0x0c880f6761f1af8d9aa9c466984b80dab9a8c9e8"
+        }
+      },
+      {
+        "token": "RAVE",
+        "gap_bps": 89.5,
+        "lo": {
+          "chain": "eth",
+          "addr": "0x17205fab260a7a6383a81452ce6315a39370db97"
+        },
+        "hi": {
+          "chain": "base",
+          "addr": "0x1aa8fd5bcce2231c6100d55bf8b377cff33acfc3"
+        }
+      },
+      {
+        "token": "TEL",
+        "gap_bps": 85.3,
+        "lo": {
+          "chain": "eth",
+          "addr": "0x467bccd9d29f223bce8043b84e8c8b282827790f"
+        },
+        "hi": {
+          "chain": "polygon_pos",
+          "addr": "0xdf7837de1f2fa4631d716cf2502f8b230f1dcc32"
+        }
+      },
+      {
+        "token": "AAVE",
+        "gap_bps": 72.3,
+        "lo": {
+          "chain": "arbitrum",
+          "addr": "0xba5ddd1f9d7f570dc94a51479a000e3bce967196"
+        },
+        "hi": {
+          "chain": "eth",
+          "addr": "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9"
+        }
+      },
+      {
+        "token": "CRVUSD",
+        "gap_bps": 38.8,
+        "lo": {
+          "chain": "eth",
+          "addr": "0xf939e0a03fb07f59a73314e73794be0e57ac1b4e"
+        },
+        "hi": {
+          "chain": "arbitrum",
+          "addr": "0x498bf2b1e120fed3ad3d42ea2165e9b73f99c1e5"
+        }
+      },
+      {
+        "token": "USDT",
+        "gap_bps": 31.7,
+        "lo": {
+          "chain": "eth",
+          "addr": "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        },
+        "hi": {
+          "chain": "polygon_pos",
+          "addr": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f"
+        }
+      }
+    ],
+    "seuils": {
+      "min_liq_usd": 100000.0,
+      "min_vol24h_usd": 1000.0,
+      "min_gap_bps": 30.0
+    }
+  }
+}
