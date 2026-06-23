@@ -1,0 +1,87 @@
+{
+  "phase": "PHASE0",
+  "venue": "OKX",
+  "instId": "ETH-USDT-SWAP",
+  "window": {
+    "start_utc": "2025-06-23T00:00:00Z",
+    "end_utc": "2026-06-23T00:00:00Z"
+  },
+  "created_utc": "2026-06-23T20:15:39Z",
+  "git_hash": "1a48af065214b329cdd80786a14ba0051d783504",
+  "git_dirty": true,
+  "code_versioned": false,
+  "provenance_note": "RECLASSE. Au moment du run, le runner phase0_okx_funding.py n'etait PAS suivi par Git (code non versionne) -> git_dirty=false initial etait FAUX (corrige a true). Provenance non figee : run conserve comme OBSERVATION NON CONCLUANTE, a REPRODUIRE avec le runner versionne (referencant son commit ou runner_sha256).",
+  "authorization": "Phase 0 explicitement autorisee (2026-06-23) : OKX/ETH-USDT-SWAP, public, borne ; AUCUN backfill/boucle/agregat/annualisation/PnL ; <=1 requete par source A.4 + metadonnees requises.",
+  "calls_count": 3,
+  "receipts": [
+    {
+      "name": "instruments_A3",
+      "url": "https://www.okx.com/api/v5/public/instruments?instType=SWAP&instId=ETH-USDT-SWAP",
+      "request_utc": "2026-06-23T20:15:38Z",
+      "http_status": 200,
+      "bytes": 1012,
+      "sha256": "d06d741d9ddad1812fd254bc63d501a89f2d220d16789de9c5a41ceb4a392752",
+      "raw_path": "data/raw/funding/okx/phase0/instruments_A3_20260623T201538Z.json"
+    },
+    {
+      "name": "funding_rate_A3",
+      "url": "https://www.okx.com/api/v5/public/funding-rate?instId=ETH-USDT-SWAP",
+      "request_utc": "2026-06-23T20:15:38Z",
+      "http_status": 200,
+      "bytes": 523,
+      "sha256": "e480e218b55533291bdf9ac6a78f90c0db59c17b31050db9270fad0f011969c6",
+      "raw_path": "data/raw/funding/okx/phase0/funding_rate_A3_20260623T201538Z.json"
+    },
+    {
+      "name": "funding_history_probe_A4_REST",
+      "url": "https://www.okx.com/api/v5/public/funding-rate-history?instId=ETH-USDT-SWAP&after=1750723200000&limit=10",
+      "request_utc": "2026-06-23T20:15:39Z",
+      "http_status": 200,
+      "bytes": 31,
+      "sha256": "fc24d69479edbb84f22c7d5bd4525349734056ad3baf7a5adf7e553f68c06a3a",
+      "raw_path": "data/raw/funding/okx/phase0/funding_history_probe_A4_REST_20260623T201538Z.json"
+    }
+  ],
+  "a3_params_recus": {
+    "instruments": {
+      "instId": "ETH-USDT-SWAP",
+      "ctType": "linear",
+      "ctVal": "0.1",
+      "ctValCcy": "ETH",
+      "ctMult": "1",
+      "settleCcy": "USDT",
+      "lever": "100",
+      "listTime": "1573557408000",
+      "state": "live"
+    },
+    "funding_rate": {
+      "instId": "ETH-USDT-SWAP",
+      "fundingRate": "0.0000350997860606",
+      "nextFundingRate": "",
+      "fundingTime": "1782259200000",
+      "nextFundingTime": "1782288000000",
+      "minFundingRate": "-0.0075",
+      "maxFundingRate": "0.0075",
+      "settFundingRate": "-0.0000474888324712",
+      "formulaType": "withRate",
+      "method": "current_period"
+    }
+  },
+  "a4_probe": {
+    "source_candidate": "REST funding-rate-history",
+    "probe_param": "after=1750723200000 (2025-06-24T00:00:00Z), limit=10",
+    "semantics_confirmed": false,
+    "records_returned": 0,
+    "coverage": "non_concluant",
+    "interpretation": "Lot vide NON interprete : la semantique exacte de before/after (docs-v5) n'est PAS etablie -> ni 'couvre' ni 'retention insuffisante'. La sonde correcte sera definie apres confirmation de la semantique."
+  },
+  "source_historique": "non concluante (REST non interprete ; dataset Historical Market Data NON sonde)",
+  "canonical": false,
+  "canonical_note": "Run NON CANONIQUE : provenance non figee (runner phase0_okx_funding.py non versionne au moment du run). Conserve comme observation PHASE0_PARTIEL HORS chaine de certification. Source OKX arretee a ce stade (REST_NON_CONCLUANT + dataset NON_CONCLUANT). Bruts conserves HORS Git, non commites.",
+  "verdict": "PHASE0_PARTIEL",
+  "abstentions": [
+    "A.4 REST: semantique de pagination before/after non etablie -> sonde NON CONCLUANTE (ni couverture ni rejet).",
+    "Dataset Historical Market Data : NON sonde (aucune sonde dataset autorisee pour l'instant)."
+  ],
+  "note": "Reclasse PHASE0_PARTIEL : A.3 observe (parametres recus, hashes) ; A.4 REST NON concluant ; dataset NON sonde. Recus de validation parametres/capacite UNIQUEMENT, PAS une serie certifiee, non agrege, ni calibration ni test. Run et bruts CONSERVES (jamais supprimes). Phase 1 (backfill) INTERDITE sans nouvelle validation humaine."
+}
