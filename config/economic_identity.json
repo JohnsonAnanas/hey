@@ -1,5 +1,5 @@
 {
-  "_note": "Registre d'identite ECONOMIQUE versionne (MISSION RESET Phase 3). Identifiant = ADRESSE (jamais ticker). Plancher IDENTITY_PRELIMINARY (affirme, non prouve) puis trois niveaux PROUVES JAMAIS equivalents : CONTRACT_SAME (meme contrat prouvable) < ECONOMIC_IDENTITY_CONFIRMED (meme actif economique prouve, recu HASHE) < REBALANCING_CONFIRMED (route de bridge/redemption reelle, cout/delai/limites, recu HASHE). Les paliers economiques exigent un evidence_hash reel ; evidence_url seul est un pointeur, pas une preuve. Charge/valide par sim/economic_identity.py. Aucune adresse devinee.",
+  "_note": "Registre d'identite ECONOMIQUE versionne (MISSION RESET Phase 3). Identifiant = ADRESSE (jamais ticker). Plancher IDENTITY_PRELIMINARY (affirme, non prouve) puis trois niveaux PROUVES JAMAIS equivalents : CONTRACT_SAME (meme contrat prouvable) < ECONOMIC_IDENTITY_CONFIRMED (meme actif economique prouve, recu HASHE) < REBALANCING_CONFIRMED (route de bridge/redemption reelle, cout/delai/limites, recu HASHE). Les paliers economiques exigent un evidence_hash reel ; evidence_url seul est un pointeur, pas une preuve. Le STATUT de claim economique (INVALIDE/REJETE/NON_CONCLUANT...) vit dans docs/EVIDENCE_LEDGER.md ; ici on ne porte que l'identite. Charge/valide par sim/economic_identity.py. Aucune adresse devinee.",
   "version": 1,
   "verified_utc": "2026-06-23",
   "assets": {
@@ -11,7 +11,7 @@
         "eth": "0xc8fb80fcc03f699c70ff0cc08c09106288888888"
       },
       "contract_verification_source": "deploiement deterministe : MEME adresse bsc et eth (spot_check.py ; data/collected/QUARANTINE.md)",
-      "bridge_route": "INCONNUE : aucune fonction OFT (oftVersion()/endpoint() revert sur bsc ET eth). L'absence d'OFT n'est PAS une preuve d'absence de TOUT bridge -> a chercher (registre tiers).",
+      "bridge_route": "INCONNUE : aucune fonction OFT (oftVersion()/endpoint() revert sur bsc ET eth, controle on-chain NON archive). L'absence d'OFT n'est PAS une preuve d'absence de TOUT bridge.",
       "source_chain": "bsc",
       "destination_chain": "eth",
       "bridge_fee_bps": null,
@@ -19,13 +19,13 @@
       "max_usd": null,
       "delay": "inconnu",
       "limits": "inconnues",
-      "risks": "marches potentiellement segmentes (pas de bridge connu) ; gap large (~498 bps triage) mais peut-etre non deplacable",
+      "risks": "marches potentiellement segmentes (pas de bridge connu) ; gap '498,6 bps' = SCREEN agrege brut (GeckoTerminal), pas un edge executable ; liq/vol = agreges AFFICHES, pas une capacite executable",
       "verified_utc": "2026-06-23",
-      "evidence_url": "on-chain: oftVersion()/endpoint() revert (bsc+eth)",
+      "evidence_url": "on-chain: oftVersion()/endpoint() revert (bsc+eth) -- NON archive",
       "evidence_hash": null,
       "status": "CONTRACT_SAME",
-      "next_measure": "chercher un bridge/redemption tiers reel (absence d'OFT != absence de tout bridge) ; sinon rester CONTRACT_SAME (lead non renouvelable possible)",
-      "notes": "Reclasse depuis 'NON-BRIDGEABLE/REJETE' (STATE.md) vers CONTRACT_SAME + rebalancing INCONNU : meme adresse != identite economique prouvee, et le rejet final n'etait pas justifie (cf EVIDENCE_LEDGER)."
+      "next_measure": "Cote PnL : GELÉ. Reouverture cumulative : (1) identite economique + route redemption/bridge ARCHIVEES -> (2) quotes executables synchronisees a taille -> (3) PnL net complet. Sans (1), gele.",
+      "notes": "CONTRACT_SAME (meme adresse). Cote PnL : NON_CONCLUANT, tag 'signal brut cross-chain a mecanisme inconnu' (screen 498,6 bps agrege ; OFT-revert non archive ; no-OFT != no-bridge). Aucune recherche ne chasse un bridge CTM. Cf docs/EVIDENCE_LEDGER.md."
     },
     "cbbtc": {
       "economic_asset_id": "cbbtc",
@@ -43,13 +43,13 @@
       "max_usd": null,
       "delay": "inconnu",
       "limits": "inconnues",
-      "risks": "gap reel etroit (live ~7 bps, profond) -> le '154 bps' du triage etait un artefact de mediane",
+      "risks": "controle live ~7 bps NON archive (verify_crosschain.py) ; le '153,6 bps' du triage = SCREEN agrege brut. Aucun recu executable hashe",
       "verified_utc": "2026-06-23",
-      "evidence_url": "verify_crosschain.py (live 7 bps, meme adresse) ; runs/...crosschain-triage",
+      "evidence_url": "verify_crosschain.py (live ~7 bps, NON archive) ; runs/...crosschain-triage (screen 153,6 bps)",
       "evidence_hash": null,
       "status": "CONTRACT_SAME",
-      "next_measure": "documenter la route de redemption/wrap officielle (cout/delai/limites) avant d'envisager une recherche inventory",
-      "notes": "CONTRACT_SAME prouve par adresse. Economiquement REJETE_SCOPE (live 7 bps) cote PnL (cf EVIDENCE_LEDGER), mais l'identite de contrat reste un fait."
+      "next_measure": "Deux recus separes : (1) quote executable archivee a taille -> confirme/rejette le gap ; (2) identite economique + route redemption/wrap documentees -- AVANT tout LEAD.",
+      "notes": "CONTRACT_SAME prouve par adresse. Cote PnL : NON_CONCLUANT (live ~7 bps non archive ; screen 153,6 bps brut) -- ne porte pas un REJETE. Identite de contrat = un fait ; identite economique + route a documenter. Cf docs/EVIDENCE_LEDGER.md."
     },
     "velvet": {
       "economic_asset_id": "velvet",
@@ -58,22 +58,22 @@
         "base": "0xbf927b841994731c573bdf09ceb0c6b0aa887cdd",
         "bsc": "0x8b194370825e37b33373e74a41009161808c1488"
       },
-      "contract_verification_source": "adresses DIFFERENTES (base != bsc) ; identite economique AFFIRMEE via route LI.FI officielle (test live 2026-06-23), mais NON figee par un recu hashe",
-      "bridge_route": "LI.FI (route officielle ayant servi au test $1k ; cout bridge ~3 bps mesure)",
+      "contract_verification_source": "adresses DIFFERENTES (base != bsc) ; route LI.FI observée/rapportée dans un test non archivé ; statut officiel, identité économique et rebalancing non prouvés",
+      "bridge_route": "LI.FI : route observée/rapportée dans un test non archivé ; statut officiel, identité économique et rebalancing non prouvés",
       "source_chain": "bsc",
       "destination_chain": "base",
-      "bridge_fee_bps": 3,
+      "bridge_fee_bps": null,
       "min_usd": null,
       "max_usd": null,
       "delay": "non archive (observe dans le test live)",
       "limits": "non archivees",
-      "risks": "ecart d'EXECUTION reel >> gap mid (29 bps) -> aller-retour mesure -160 bps a $1k ; basis mean-reverting (std 71 bps) mais intradeable",
+      "risks": "Aller-retour LI.FI $1k observe NEGATIF mais test NON archive/hashe => magnitudes NON VERIFIEES (les ~-160 bps, ~50 bps agregateur, ~3 bps bridge, ~29 bps gap mid viennent de ce test). Serie de basis MID (settle_crosschain_velvet.csv) identity UNVERIFIED et non manifestee",
       "verified_utc": "2026-06-23",
-      "evidence_url": "docs/STATE.md §1 (test LI.FI $1k) ; data/historical/settle_crosschain_velvet.csv",
+      "evidence_url": "docs/STATE.md §1 (test LI.FI $1k, NON hashe) ; data/historical/settle_crosschain_velvet.csv (mid, UNVERIFIED)",
       "evidence_hash": null,
       "status": "IDENTITY_PRELIMINARY",
-      "next_measure": "ARCHIVER+HASHER le recu LI.FI (requete+reponse brutes, route, tailles, couts, timestamp) -> promeut IDENTITY_PRELIMINARY vers ECONOMIC_IDENTITY_CONFIRMED (condition d'entree en recherche inventory, §5). Sans evidence_hash : reste preliminaire et HORS inventory.",
-      "notes": "Statut PLANCHER IDENTITY_PRELIMINARY : identite affirmee en live (LI.FI) mais evidence_hash=null => non prouvee, HORS gate inventory (§5). Trade REJETE_PRELIMINAIRE cote PnL (-160 bps, recu non archive). Rebalancing observe fonctionnel (~3 bps) mais NON promu faute de recu hashe."
+      "next_measure": "Reouverture CUMULATIVE : (1) identite economique + route de rebalancing officielle ARCHIVEES -> (2) QuotePair fraiche archivee (req/resp, timestamp, tailles, couts, hypotheses de gas) -> (3) PnL 7-termes + capacite/stress. Une quote positive seule != LEAD.",
+      "notes": "Statut PLANCHER IDENTITY_PRELIMINARY : identite affirmee en live (LI.FI) mais evidence_hash=null => non prouvee, HORS gate inventory (§5). Cote PnL : NON_CONCLUANT (obs negative LI.FI non archivee/hashee => ne porte pas un REJETE ; chiffres du test NON verifies). Gates inventory/paper fermees. Cf docs/EVIDENCE_LEDGER.md."
     }
   }
 }
