@@ -1,0 +1,30 @@
+{
+  "slug": "backfill-intrachain-base-calibration",
+  "created_utc": "2026-06-23T06:06:40Z",
+  "git_hash": "31e52142539093e8acda154be535accfe6e08c0c",
+  "git_dirty": false,
+  "hypothesis": "Sur Base v2 certifie, le moteur observe-t-il des PnL nets POSITIFS, sur routes certifiees, a taille utile, et assez de blocs pour justifier un test FORWARD ? (PAS 'on aurait gagne'.)",
+  "command": "python backfill_intrachain.py --days 7 --cadence-min 60 --start-block 47400317 --end-block 47702717 --min-usd 50000 --gas-units 300000",
+  "period": "blocs 47400317..47702717 (pas 1800, 169 demandes)",
+  "sources": [
+    "archive RPC Base : https://base-mainnet.g.alchemy.com/v2/***",
+    "etat on-chain au bloc (getReserves/getFee + baseFee du bloc)"
+  ],
+  "inputs": [
+    {
+      "path": "config\\universe_base.json",
+      "sha256": "bb317b1eb0f1423c4fbe26ec7ed9c956a4371eb42f4737a57d84ebb2eaea9f36",
+      "bytes": 1342
+    },
+    {
+      "path": "data\\logs\\backfill_intrachain_20260623_080620.csv",
+      "sha256": "deccf5c69e0a82d8a8bb8cd9562f75b6c1549f1417317a7b990c541e11027eee",
+      "bytes": 31557
+    }
+  ],
+  "universe": "5 tokens certifies v2 ; 9 paires routables ; 30 pools v2",
+  "assumed_costs": "frais pool au bloc ; gas 300000u x baseFee(bloc) ; ancre USD(bloc) ; taille optimale ENTIERE EVM ; marge statut $5",
+  "result": "169 demandes / 169 lus / 0 abstentions ; lectures illisibles 0.0% ; routes v2 169 ; A_OBSERVER 0 ; FORWARD 0 ; v3 non quotees 151 ; sha256(sortie)=deccf5c69e0a82d8",
+  "verdict": "NON_CONCLUANT",
+  "notes": "Backfill de RESERVES : reconstruit le prix/PnL exact au bloc, mais NE VOIT NI les transactions concurrentes intra-bloc NI le positionnement MEV reel. Ne prouve donc PAS qu'on aurait gagne ; borne SUPERIEURE optimiste. Un FORWARD reste requis pour conclure."
+}
