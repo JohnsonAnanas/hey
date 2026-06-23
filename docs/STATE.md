@@ -59,11 +59,21 @@ PnL net =
   − achat exécutable
   − frais
   − gas
-  − coût de rebalancing amorti (si applicable)
+  − coût de rebalancing amorti
+  − coût de capital immobilisé
+  − coût de hedge
+  − provision de risque opérationnel
 ```
 
-- **vente / achat exécutable** = `amountOut` réel par taille (quote on-chain ou math AMM exacte), **jamais un mid**.
+> Formule **unique** à 7 termes, réconciliée avec MISSION RESET §7 et
+> `sim/contracts.py::compute_net_pnl` (2026-06-23) : ni plus, ni moins.
+
+- **vente / achat exécutable** = `amountOut` réel par taille (quote on-chain ou math AMM exacte), **jamais un mid**. Leur différence = le **brut**.
 - **frais** = frais de pool/venue (embarqués dans la quote v3 ; explicites en v2).
 - **gas** = `gas_estime_conservateur` (exec + L1-data + marge), jamais « exact » sans executor.
-- **coût de rebalancing amorti** = bridge + capital immobilisé, **uniquement** pour le jeu d'inventaire cross-chain (0 pour l'atomique mono-chaîne).
+- **coût de rebalancing amorti** = bridge, **uniquement** pour le jeu d'inventaire cross-chain (**0 explicite** pour l'atomique mono-chaîne).
+- **coût de capital immobilisé** = coût du capital bloqué pendant l'opération (séparé du rebalancing).
+- **coût de hedge** = couverture éventuelle — **central pour le track funding / cash-and-carry** ; `0.0` explicite s'il n'y a pas de hedge.
+- **provision de risque opérationnel** = provision liquidation / plateforme / incident.
+- **Pas de zéro silencieux pour hedge ni provision de risque op.** : un coût applicable mais inconnu ⇒ `None` ⇒ **abstention** (`build_quote_pair` : `net=NaN`, `confidence=0`) ; un `0.0` doit être **explicite et justifié par le caller** (MISSION RESET §7).
 - Verdict scopé à l'actif + la fenêtre. **Borne supérieure** (ne voit ni intra-bloc ni MEV). Jamais une conclusion globale.

@@ -1,5 +1,5 @@
 {
-  "_note": "Registre d'identite ECONOMIQUE versionne (MISSION RESET Phase 3). Identifiant = ADRESSE (jamais ticker). Trois niveaux JAMAIS equivalents : CONTRACT_SAME (meme contrat prouvable) < ECONOMIC_IDENTITY_CONFIRMED (meme actif economique prouve, reçu) < REBALANCING_CONFIRMED (route de bridge/redemption reelle, cout/delai/limites). Charge/valide par sim/economic_identity.py. Aucune adresse devinee.",
+  "_note": "Registre d'identite ECONOMIQUE versionne (MISSION RESET Phase 3). Identifiant = ADRESSE (jamais ticker). Plancher IDENTITY_PRELIMINARY (affirme, non prouve) puis trois niveaux PROUVES JAMAIS equivalents : CONTRACT_SAME (meme contrat prouvable) < ECONOMIC_IDENTITY_CONFIRMED (meme actif economique prouve, recu HASHE) < REBALANCING_CONFIRMED (route de bridge/redemption reelle, cout/delai/limites, recu HASHE). Les paliers economiques exigent un evidence_hash reel ; evidence_url seul est un pointeur, pas une preuve. Charge/valide par sim/economic_identity.py. Aucune adresse devinee.",
   "version": 1,
   "verified_utc": "2026-06-23",
   "assets": {
@@ -58,7 +58,7 @@
         "base": "0xbf927b841994731c573bdf09ceb0c6b0aa887cdd",
         "bsc": "0x8b194370825e37b33373e74a41009161808c1488"
       },
-      "contract_verification_source": "adresses DIFFERENTES (base != bsc) ; identite economique affirmee via route LI.FI officielle (test live 2026-06-23)",
+      "contract_verification_source": "adresses DIFFERENTES (base != bsc) ; identite economique AFFIRMEE via route LI.FI officielle (test live 2026-06-23), mais NON figee par un recu hashe",
       "bridge_route": "LI.FI (route officielle ayant servi au test $1k ; cout bridge ~3 bps mesure)",
       "source_chain": "bsc",
       "destination_chain": "base",
@@ -71,9 +71,9 @@
       "verified_utc": "2026-06-23",
       "evidence_url": "docs/STATE.md §1 (test LI.FI $1k) ; data/historical/settle_crosschain_velvet.csv",
       "evidence_hash": null,
-      "status": "ECONOMIC_IDENTITY_CONFIRMED",
-      "next_measure": "ARCHIVER le reçu LI.FI (requete+reponse brutes + hash, manifest) pour figer l'identite ET promouvoir vers REBALANCING_CONFIRMED ; sans reçu hashe, l'identite reste PRELIMINAIRE",
-      "notes": "evidence_hash=null => statut PRELIMINAIRE par doctrine (§0). Trade REJETE_PRELIMINAIRE cote PnL (-160 bps, reçu non archive). Rebalancing observe fonctionnel (~3 bps) mais NON promu a REBALANCING_CONFIRMED faute de reçu archive."
+      "status": "IDENTITY_PRELIMINARY",
+      "next_measure": "ARCHIVER+HASHER le recu LI.FI (requete+reponse brutes, route, tailles, couts, timestamp) -> promeut IDENTITY_PRELIMINARY vers ECONOMIC_IDENTITY_CONFIRMED (condition d'entree en recherche inventory, §5). Sans evidence_hash : reste preliminaire et HORS inventory.",
+      "notes": "Statut PLANCHER IDENTITY_PRELIMINARY : identite affirmee en live (LI.FI) mais evidence_hash=null => non prouvee, HORS gate inventory (§5). Trade REJETE_PRELIMINAIRE cote PnL (-160 bps, recu non archive). Rebalancing observe fonctionnel (~3 bps) mais NON promu faute de recu hashe."
     }
   }
 }

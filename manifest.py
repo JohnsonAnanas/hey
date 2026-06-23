@@ -39,6 +39,18 @@ VERDICTS = ("INVALIDE", "REJETE", "NON_CONCLUANT", "LEAD", "MECANISME_CONFIRME",
 FORBIDDEN_VERDICTS = ("VALIDE", "VALIDÉ")
 
 
+def _check_verdict(verdict: str) -> None:
+    """Refuse a l'ECRITURE un verdict interdit ou inconnu (pas seulement au CLI argparse). 'VALIDE'/
+    'VALIDÉ' sont bannis (§2) ; tout verdict hors taxonomie est rejete. S'applique AUSSI a l'API
+    programmatique write_manifest (les runners), pas seulement a --verdict choices=VERDICTS."""
+    if verdict in FORBIDDEN_VERDICTS:
+        raise ValueError(
+            f"verdict '{verdict}' INTERDIT (taxonomie MISSION RESET §2) : jamais pour un triage, "
+            f"une mediane ou une quote isolee. Choisir un de {VERDICTS}.")
+    if verdict not in VERDICTS:
+        raise ValueError(f"verdict '{verdict}' inconnu ; attendu un de {VERDICTS}.")
+
+
 def _git(*args: str) -> str:
     try:
         out = subprocess.run(["git", "-C", HERE, *args], capture_output=True, text=True)
@@ -70,6 +82,7 @@ def sha256_file(path: str) -> dict:
 
 
 def build(args) -> dict:
+    _check_verdict(args.verdict)
     return {
         "slug": args.slug,
         "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),

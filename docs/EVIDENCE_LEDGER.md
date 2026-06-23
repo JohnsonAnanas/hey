@@ -58,7 +58,7 @@ Un résultat n'est recevable que s'il a un **reçu reproductible** (CSV manifest
 | **VELVET −160 bps** | ❌ **réponse LI.FI brute non archivée/hashée** | **REJETÉ_PRÉLIMINAIRE** — tête de liste à corriger |
 | CTM non-bridgeable | ⚠️ on-chain reverts, pas de manifest dédié | rétrogradé en **LEAD** (rejet final non justifié) |
 
-**Trou prioritaire :** le test VELLET LI.FI ($1k, −160 bps) est la conclusion la plus citée et n'a
+**Trou prioritaire :** le test VELVET LI.FI ($1k, −160 bps) est la conclusion la plus citée et n'a
 **aucun reçu hashé**. Tant qu'il n'est pas archivé (requête + réponse LI.FI, route, tailles, coûts,
 timestamp, hash) via un manifest, il reste **préliminaire** — pas un rejet final.
 

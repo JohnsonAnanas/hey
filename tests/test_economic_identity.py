@@ -1,15 +1,16 @@
 """Tests du registre d'identite economique (sim/economic_identity.py + config/economic_identity.json)
 — MISSION RESET Phase 3.
 
-On epingle la doctrine §5 : les TROIS niveaux ne sont JAMAIS equivalents, et le statut declare doit
-reposer sur une preuve (identite de contrat OU reçu archive). Reflete les reclassements CTM/VELVET.
+On epingle la doctrine §5 : les niveaux ne sont JAMAIS equivalents, et un palier ECONOMIQUE exige un
+recu archive+hashe (evidence_hash) — un evidence_url seul ne suffit pas. Reflete les reclassements
+CTM (CONTRACT_SAME) et VELVET (IDENTITY_PRELIMINARY tant que le recu LI.FI n'est pas hashe).
 """
 import json
 
 import pytest
 
 from sim.economic_identity import (
-    CONTRACT_SAME, ECONOMIC_IDENTITY_CONFIRMED, REBALANCING_CONFIRMED,
+    IDENTITY_PRELIMINARY, CONTRACT_SAME, ECONOMIC_IDENTITY_CONFIRMED, REBALANCING_CONFIRMED,
     EconomicAsset, load_registry, contract_same,
     eligible_for_inventory_research, eligible_for_paper_trading, canonical_from_registry,
 )
@@ -28,11 +29,15 @@ def test_registre_charge_les_trois_actifs(reg):
 
 def test_niveaux_non_interchangeables():
     assert ECONOMIC_IDENTITY_CONFIRMED != CONTRACT_SAME != REBALANCING_CONFIRMED
-    # ordre strict des paliers
+    # ordre strict des paliers prouves
     a = _mk(status=CONTRACT_SAME, addrs={"bsc": _SAME, "eth": _SAME})
     b = _mk(status=REBALANCING_CONFIRMED, addrs={"bsc": _SAME, "eth": _SAME})
     assert b.rank > a.rank
     assert b.at_least(ECONOMIC_IDENTITY_CONFIRMED) and not a.at_least(ECONOMIC_IDENTITY_CONFIRMED)
+    # le plancher est SOUS CONTRACT_SAME et n'ouvre aucun gate
+    pre = _mk(status=IDENTITY_PRELIMINARY, addrs={"base": _A1, "bsc": _A2})
+    assert pre.rank < a.rank
+    assert not pre.at_least(CONTRACT_SAME)
 
 
 # --- 2. CTM : CONTRACT_SAME, mais PAS de rebalancing (lecon « OFT absent != pas de bridge ») -----
@@ -45,15 +50,15 @@ def test_ctm_contract_same_sans_rebalancing(reg):
     assert not eligible_for_paper_trading(ctm)
 
 
-# --- 3. VELVET : identite economique (adresses DIFFERENTES, preuve LI.FI), pas encore rebalancing -
+# --- 3. VELVET : IDENTITY_PRELIMINARY (recu LI.FI non hashe) => HORS inventory -------------------
 
-def test_velvet_identite_economique_par_preuve(reg):
+def test_velvet_preliminaire_hors_inventory(reg):
     v = reg["velvet"]
-    assert v.status == ECONOMIC_IDENTITY_CONFIRMED
+    assert v.status == IDENTITY_PRELIMINARY
+    assert v.evidence_hash is None                            # recu LI.FI pas encore archive+hashe
     assert contract_same(v) is False                          # adresses base != bsc
-    assert eligible_for_inventory_research(v)                 # >= ECONOMIC_IDENTITY_CONFIRMED
-    assert not eligible_for_paper_trading(v)                  # rebalancing non confirme (reçu non archive)
-    assert v.evidence_hash is None                            # => PRELIMINAIRE par doctrine
+    assert not eligible_for_inventory_research(v)             # plancher : aucun gate
+    assert not eligible_for_paper_trading(v)
 
 
 def test_cbbtc_contract_same(reg):
@@ -61,7 +66,7 @@ def test_cbbtc_contract_same(reg):
     assert contract_same(reg["cbbtc"]) is True
 
 
-# --- 4. La validation REFUSE un statut sans preuve ----------------------------------------------
+# --- 4. La validation REFUSE un statut sans la preuve correspondante ----------------------------
 
 def test_load_refuse_contract_same_sans_meme_adresse(tmp_path):
     p = _write(tmp_path, _mk_raw(status=CONTRACT_SAME, addrs={"base": _A1, "bsc": _A2},
@@ -70,18 +75,29 @@ def test_load_refuse_contract_same_sans_meme_adresse(tmp_path):
         load_registry(str(p))
 
 
-def test_load_refuse_identite_economique_sans_preuve(tmp_path):
+def test_load_refuse_economique_sans_hash(tmp_path):
+    # evidence_url present mais PAS de evidence_hash => un pointeur n'est pas une preuve => refus
     p = _write(tmp_path, _mk_raw(status=ECONOMIC_IDENTITY_CONFIRMED, addrs={"base": _A1, "bsc": _A2},
-                                 evidence_url=None, evidence_hash=None))
-    with pytest.raises(ValueError, match="non prouvee|sans identite"):
+                                 evidence_url="https://bridge.doc/officiel", evidence_hash=None))
+    with pytest.raises(ValueError, match="evidence_hash"):
         load_registry(str(p))
 
 
-def test_load_accepte_identite_economique_avec_preuve(tmp_path):
+def test_load_accepte_economique_avec_hash(tmp_path):
     p = _write(tmp_path, _mk_raw(status=ECONOMIC_IDENTITY_CONFIRMED, addrs={"base": _A1, "bsc": _A2},
-                                 evidence_url="https://bridge.doc/officiel", evidence_hash=None))
+                                 evidence_url="https://bridge.doc/officiel", evidence_hash="a" * 64))
     reg = load_registry(str(p))
     assert reg["t"].status == ECONOMIC_IDENTITY_CONFIRMED
+    assert eligible_for_inventory_research(reg["t"])          # palier + recu hashe => gate ouvert
+
+
+def test_load_accepte_identity_preliminary_mais_hors_gate(tmp_path):
+    # plancher honnete : se charge sans preuve, mais n'ouvre aucun gate
+    p = _write(tmp_path, _mk_raw(status=IDENTITY_PRELIMINARY, addrs={"base": _A1, "bsc": _A2},
+                                 evidence_url="https://live/observe", evidence_hash=None))
+    reg = load_registry(str(p))
+    assert reg["t"].status == IDENTITY_PRELIMINARY
+    assert not eligible_for_inventory_research(reg["t"])
 
 
 def test_load_refuse_statut_inconnu(tmp_path):

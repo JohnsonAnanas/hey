@@ -3,10 +3,13 @@ passe par CES objets, jamais par un dict ad hoc : une quote brute hashee (`RawQu
 achat/vente chiffree au net (`QuotePair`), un etat d'inventaire (`InventoryState`).
 
 Deux principes du cahier des charges sont CODES ici, pas seulement documentes :
-- Formule de PnL net UNIQUE et canonique (docs/STATE.md §6) : `compute_net_pnl`. Aucun autre chemin.
+- Formule de PnL net UNIQUE et canonique (docs/STATE.md §6 == MISSION RESET §7) : `compute_net_pnl`,
+  7 termes (gross - fees - gas - rebalancing - capital - hedge - provision_risque_op). Aucun autre chemin.
 - ABSTENTION jamais fallback silencieux (regle non negociable §7) : un champ de cout manquant (None)
   ou une jambe sans `amount_out` (>0) => net = NaN, confidence = 0, `missing_fields` peuple. On
-  n'invente JAMAIS un 0 a la place d'une donnee absente.
+  n'invente JAMAIS un 0 a la place d'une donnee absente. `hedge_usd` / `op_risk_provision_usd` n'ont
+  AUCUN defaut a zero : un cout applicable mais inconnu se passe en None (abstention), un 0.0 doit
+  etre explicite et justifie par le caller.
 
 PUR / testable (aucun reseau). Style aligne sur les dataclasses frozen existantes
 (`QuotedDecision` dans sim/route_quoted.py, `CycleEval` dans sim/amm_v2.py).
@@ -62,7 +65,9 @@ class RawQuote:
 # === 2. QuotePair : le SEUL resultat economique recevable (deux quotes, net de tout) ============
 
 # Champs de cout REQUIS pour conclure : leur absence (None) declenche l'abstention (jamais un 0).
-_REQUIRED_COSTS = ("gross_pnl_usd", "fees_usd", "gas_usd")
+# hedge_usd / op_risk_provision_usd y figurent => le caller DOIT les fournir (0.0 explicite ou valeur),
+# jamais un defaut silencieux a zero (MISSION RESET §7).
+_REQUIRED_COSTS = ("gross_pnl_usd", "fees_usd", "gas_usd", "hedge_usd", "op_risk_provision_usd")
 
 
 @dataclass(frozen=True)
@@ -79,8 +84,10 @@ class QuotePair:
     gross_pnl_usd: float          # vente executable - achat executable (pre-couts)
     fees_usd: float
     gas_usd: float
-    rebalancing_usd: float        # bridge/rebalancing amorti (0 pour l'atomique mono-chaine)
+    rebalancing_usd: float        # bridge amorti (0 explicite pour l'atomique mono-chaine)
     capital_usd: float            # cout du capital immobilise
+    hedge_usd: float              # cout de couverture (central pour le track funding ; 0.0 explicite sinon)
+    op_risk_provision_usd: float  # provision de risque operationnel (liquidation/plateforme/incident)
     net_pnl_usd: float            # = compute_net_pnl(...) ; NaN si abstention
     confidence: float             # 1.0 complet, 0.0 si un champ requis manque
     missing_fields: tuple[str, ...]
@@ -90,25 +97,33 @@ class QuotePair:
 
 
 def compute_net_pnl(gross_pnl_usd: float, fees_usd: float, gas_usd: float,
-                    rebalancing_usd: float = 0.0, capital_usd: float = 0.0) -> float:
-    """Formule de PnL net UNIQUE et canonique (docs/STATE.md §6) :
+                    rebalancing_usd: float = 0.0, capital_usd: float = 0.0, *,
+                    hedge_usd: float, op_risk_provision_usd: float) -> float:
+    """Formule de PnL net UNIQUE et canonique (docs/STATE.md §6 == MISSION RESET §7) :
 
-        net = vente executable - achat executable - frais - gas - rebalancing amorti - capital
+        net = gross - frais - gas - rebalancing - capital - hedge - provision_risque_operationnel
 
-    `gross_pnl_usd` = (vente - achat) executables. Aucun autre chemin de calcul du net n'est legitime.
+    `gross_pnl_usd` = (vente - achat) executables. `hedge_usd` et `op_risk_provision_usd` sont REQUIS
+    (keyword-only, AUCUN defaut a zero) : un cout applicable mais inconnu se passe en None et declenche
+    l'abstention (cf build_quote_pair) ; un 0.0 doit etre explicite et justifie par le caller. Aucun
+    autre chemin de calcul du net n'est legitime.
     """
-    return gross_pnl_usd - fees_usd - gas_usd - rebalancing_usd - capital_usd
+    return (gross_pnl_usd - fees_usd - gas_usd - rebalancing_usd - capital_usd
+            - hedge_usd - op_risk_provision_usd)
 
 
 def build_quote_pair(*, asset_economic_id: str, buy: RawQuote, sell: RawQuote, direction: str,
                      size_usd: float, same_time_tolerance: float,
                      gross_pnl_usd: float | None, fees_usd: float | None, gas_usd: float | None,
+                     hedge_usd: float | None, op_risk_provision_usd: float | None,
                      rebalancing_usd: float | None = 0.0, capital_usd: float | None = 0.0) -> QuotePair:
     """Construit un `QuotePair` en appliquant la garde d'ABSTENTION (§7). Si un champ de cout requis
     est None, OU si une jambe n'a pas de sortie (`amount_out <= 0`) : net = NaN, confidence = 0,
     `missing_fields` liste les manques — jamais un 0 invente. Sinon : net = `compute_net_pnl`,
-    confidence = 1.0."""
+    confidence = 1.0. `hedge_usd` / `op_risk_provision_usd` sont requis (pas de defaut) : un 0.0 est
+    une decision EXPLICITE du caller, un None (cout applicable mais inconnu) declenche l'abstention."""
     comp = {"gross_pnl_usd": gross_pnl_usd, "fees_usd": fees_usd, "gas_usd": gas_usd,
+            "hedge_usd": hedge_usd, "op_risk_provision_usd": op_risk_provision_usd,
             "rebalancing_usd": rebalancing_usd, "capital_usd": capital_usd}
     missing = [k for k in _REQUIRED_COSTS if comp[k] is None]
     if comp["rebalancing_usd"] is None:
@@ -127,10 +142,12 @@ def build_quote_pair(*, asset_economic_id: str, buy: RawQuote, sell: RawQuote, d
     if missing:
         return QuotePair(asset_economic_id, buy, sell, direction, size_usd, same_time_tolerance,
                          _v(gross_pnl_usd), _v(fees_usd), _v(gas_usd), _v(rebalancing_usd),
-                         _v(capital_usd), _NAN, 0.0, missing)
-    net = compute_net_pnl(gross_pnl_usd, fees_usd, gas_usd, rebalancing_usd, capital_usd)
+                         _v(capital_usd), _v(hedge_usd), _v(op_risk_provision_usd), _NAN, 0.0, missing)
+    net = compute_net_pnl(gross_pnl_usd, fees_usd, gas_usd, rebalancing_usd, capital_usd,
+                          hedge_usd=hedge_usd, op_risk_provision_usd=op_risk_provision_usd)
     return QuotePair(asset_economic_id, buy, sell, direction, size_usd, same_time_tolerance,
-                     gross_pnl_usd, fees_usd, gas_usd, rebalancing_usd, capital_usd, net, 1.0, ())
+                     gross_pnl_usd, fees_usd, gas_usd, rebalancing_usd, capital_usd,
+                     hedge_usd, op_risk_provision_usd, net, 1.0, ())
 
 
 # === 3. InventoryState : soldes/capacite/rebalancing reels d'une venue ==========================
