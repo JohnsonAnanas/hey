@@ -106,7 +106,7 @@ def resolve(rpc, A, dec):
             fac = Web3.to_checksum_address(v["factory"])
             cd = SEL_GETPOOL_V3 + abi_encode(["address", "address", "uint24"], [A[s0], A[s1], v["fee"]])
             specs.append({"pair": (s0, s1), "venue": v["name"], "method": "getPoolV3", "fee": None,
-                          "kind": "v3", "factory": fac})
+                          "kind": "v3", "factory": fac, "fee_tier": v["fee"]})   # fee_tier pour le quoteur v3
             calls.append((fac, cd))
     res = rpc.multicall(calls)
     resolved = [{**spec, "address": addr_from(data)} for spec, (ok, data) in zip(specs, res) if ok and addr_from(data)]
