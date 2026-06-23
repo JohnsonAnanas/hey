@@ -11,14 +11,14 @@
 | « DEX↔CEX majors (ETH/BTC) capturable par un solo, net de frais » | ETH : 263 obs, net médian **−11,9 bps**, 2 % actionnable. BTC/ETH backtest : net plancher ~0. | `data/historical/settle_dex_cex.csv`, `data/logs/backtest_gap.csv` |
 | « Arbitrage atomique LENT, net, observable sur l'univers Base ÉLIGIBLE (paires ancrées WETH/USDC) » | Fenêtre 14 j v3 : **42 161 routes éligibles, 0 net-positive** (quotes v3 exactes, borne sup.). Backfill v2 7 j corrobore (0 net, 98 % sans dislocation brute). | `runs/…backfill-v3-fenetre-longue` (REJETE scopé) ; `runs/…backfill-intrachain` |
 | « CBBTC a un vrai gap cross-chain » | Live **7 bps** (base↔eth, même adresse, profond). Le « 154 bps » du triage = **artefact de médiane** de la fenêtre obs. | `verify_crosschain.py` (live) vs `runs/…crosschain-triage` |
+| « CTM 322 bps cross-chain récoltable » | **NON-BRIDGEABLE** : même code déterministe (même adresse bsc/eth) mais **aucune fonction OFT** → déploiements séparés, marchés **segmentés**, gap **non arbitrable** (on ne peut pas déplacer le token). | on-chain : `oftVersion()`/`endpoint()` revert sur bsc ET eth |
+| « Inventaire cross-chain (mean-reversion) net-positif — meilleur candidat VELVET base↔bsc » | **Test exact $1k (LI.FI, 2026-06-23)** : acheter bsc / vendre base = **−$16 (−160 bps)** aller-retour. Frais agrégateur ~50 bps + écart exécutable réel ≫ le gap **mid** de 29 bps. Le bridge ne coûtait que 3 bps (**pas** le tueur) — c'est l'**exécution**. Le basis mean-reverting (std 71 bps) est réel comme série de prix mais **intradeable**. | quotes **LI.FI exactes** (identité VELVET officielle confirmée) |
+| « DEX↔CEX VIRTUAL capturable par un solo » | Edge au mid (+40 bps), nul au plancher (−4 bps), fenêtres **2 min** (course MEV). Pas le jeu lent d'un solo. | `data/logs/backtest_gap.csv` |
 
 ## 2. Hypothèses seulement NON CONCLUES (pas mesurées rigoureusement)
 
 | Hypothèse | Pourquoi non conclue | Inconnue pivot |
 |---|---|---|
-| « Inventaire cross-chain (récolte de mean-reversion) net-positif sur un token bridgeable » | **Jamais mesuré.** VELVET base↔bsc montre un basis **mean-reverting** (std 71 bps, demi-vie ~3h) mais identité **non prouvée** (adresses ≠) + coût de bridge **non mesuré**. | **coût de bridge vs amplitude** |
-| « CTM 322 bps est récoltable » | Gap **réel** (même adresse, 2 côtés profonds+actifs), mais **persistant** → quasi sûrement = **prime de friction de bridge** (le gap ≈ le coût). Coût de bridge non mesuré → penche REJETÉ. | coût de bridge (≈ 322 bps ?) |
-| « DEX↔CEX VIRTUAL capturable par un solo » | Edge au mid (+40 bps), nul au plancher (−4 bps), fenêtres **2 min** (course MEV). Pas le jeu lent d'un solo → penche REJETÉ. | exécution réelle |
 | « Le funding carry est une stratégie nette défendable » | ~4 %/an (1 an quotidien) — **modeste**, jamais testé net de liquidation/plateforme/retournement. C'est un **benchmark**, pas une stratégie testée. | drawdown / risque plateforme |
 
 ## 3. PnL net réellement positif mesuré
@@ -36,8 +36,12 @@
 
 ## 5. L'UNIQUE prochain calcul économique utile
 
-**Un seul test, réduit à la formule de PnL ci-dessous** : un actif, **deux venues**, **quotes exactes à $1k / $5k / $10k**, une période → verdict (REJETÉ / NON_CONCLUANT / VALIDÉ). Rien de plus.
-- Candidat en tête (à **choisir ensemble**) : **VELVET base↔bsc** (le seul basis mean-reverting), une fois l'identité certifiée et le coût de bridge intégré. Probable issue : « gap ≈ coût de bridge → non récoltable » — mais on **saura** au lieu d'assumer.
+Le test cross-chain (VELVET, le meilleur candidat) est **FAIT → rejeté à $1k exécutable** (LI.FI, −160 bps). Avec l'**atomique-majors** ET l'**inventaire cross-chain** rejetés au net exécutable, **il n'y a plus de prochain test « deux venues / quote $1k » évident sur l'univers actuel.** Le pattern *est* le résultat : partout, mesuré au **net exécutable**, c'est négatif — le gap affiché est la **prime de risque**, jamais un profit.
+
+La suite est une **décision stratégique, à prendre ensemble** (pas un calcul évident) :
+- **(a)** Tester le **funding carry** net de risque (liquidation/plateforme) — la dernière thèse non conclue, mais modeste (~4 %/an) et c'est un *benchmark*, pas un arb.
+- **(b)** Acter que l'arb/inventaire DeFi accessible pour un solo patient est une **prime de risque non récoltable**, et **changer de jeu** (ex. être le **LP / market-maker** — encaisser les frais au lieu de les payer).
+- **(c)** Élargir à la **longue traîne** (gelé) — gros gaps mais gros coûts d'exécution/risque ; même pattern attendu.
 
 ## 6. Formule de PnL — UNIQUE et canonique
 
