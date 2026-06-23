@@ -285,7 +285,7 @@ def main() -> int:
             print(f"     {d.pair} {d.venue_a}->{d.venue_b} net~${d.pnl_net_usd:.2f} cap~${d.capacity_usd:.0f} "
                   f"persist {pers.frac_positive:.0%}/{pers.longest_streak}blk sur {pers.n_blocks}")
 
-    verdict = "VALIDE" if forward else "NON_CONCLUANT"
+    verdict = "LEAD" if forward else "NON_CONCLUANT"   # signal forward = PISTE, jamais VALIDE (§2)
     run_dir, m = write_manifest(
         slug="backfill-intrachain-base-calibration",
         hypothesis=("Sur Base v2 certifie, le moteur observe-t-il des PnL nets POSITIFS, sur routes certifiees, "

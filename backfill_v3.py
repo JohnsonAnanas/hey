@@ -283,7 +283,7 @@ def main() -> int:
     if eligible_eval == 0:
         verdict = "NON_CONCLUANT"
     elif n_observ > 0:
-        verdict = "VALIDE"        # une route nette observable existe dans l'univers éligible (borne sup.)
+        verdict = "LEAD"          # route nette observable (borne sup.) = PISTE a confirmer live, jamais VALIDE (§2)
     else:
         verdict = "REJETE"        # hypothèse rejetée pour l'univers éligible + cette fenêtre
 

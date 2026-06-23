@@ -120,7 +120,7 @@ def main() -> int:
         print(f"    {token:<10} gap {gap:.0f}bps {lo}({per[lo][3][:10]}) vs {hi}({per[hi][3][:10]})"
               f" -> exige registre de bridge officiel avant test")
 
-    verdict = "VALIDE" if shortlist else ("NON_CONCLUANT" if registry else "REJETE")
+    verdict = "LEAD" if shortlist else ("NON_CONCLUANT" if registry else "REJETE")  # triage = PISTE, jamais VALIDE (§2)
     extra = {
         "shortlist_profond": [{"token": t, "gap_bps": round(g, 1), "chaines": list(per),
                                "min_liq_usd": round(mliq), "min_vol24h_usd": round(mvol)}

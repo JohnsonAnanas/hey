@@ -325,7 +325,7 @@ def main() -> int:
     else:
         print("\n  Aucun CANDIDAT_FORWARD sur la fenetre.")
 
-    verdict = "VALIDE" if forward else "NON_CONCLUANT"
+    verdict = "LEAD" if forward else "NON_CONCLUANT"   # signal forward = PISTE, jamais VALIDE (§2)
     note = ("CALIBRATION du moteur. Resultat vide/court = couverture & liquidite v2 sur Base "
             "(v3 ABSTENU faute de quoter, fenetre courte), PAS une absence d'alpha DeFi. "
             "v3 = grosse part de la liquidite Base -> a instrumenter (quoter) avant toute conclusion.")
