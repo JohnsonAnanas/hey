@@ -52,6 +52,7 @@ class QuotedDecision:
     fixed_net_usd: float      # net a la taille FIXE de reference (pour la persistance)
     n_sizes: int
     n_abstain_sizes: int
+    first_abstain_size: float  # plus petite taille non-remplie (revert) — nan si toutes remplies
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -78,24 +79,25 @@ def _eval_dir(pair, va, vb, direction, p_first, p_second, sizes_usd, fixed_size_
         ge, gl, gm, gt = gas_model(gas_units)
         pts[s] = {"net": gross - gt, "gross": gross, "gas": (ge, gl, gm, gt)}
     fixed_net = pts.get(fixed_size_usd, {}).get("net", _NAN) if pts.get(fixed_size_usd) else _NAN
+    first_abs = next((s for s in sizes if pts.get(s) is None), _NAN)        # plus petite taille non-remplie
     valid = {s: d for s, d in pts.items() if d is not None}
     if not valid:
         return QuotedDecision(pair, va, vb, direction, "REJETE", "toutes tailles abstenues",
                               _NAN, _NAN, _NAN, _NAN, _NAN, _NAN, _NAN, _NAN, _NAN, _NAN, _NAN,
-                              fixed_net, len(sizes_usd), n_abs)
+                              fixed_net, len(sizes_usd), n_abs, first_abs)
     best_s = max(valid, key=lambda s: valid[s]["net"])
     b = valid[best_s]
     ge, gl, gm, gt = b["gas"]
     if b["net"] <= 0:
         return QuotedDecision(pair, va, vb, direction, "REJETE", "pnl_net<=0",
                               b["gross"], ge, gl, gm, gt, b["net"], best_s, b["net"],
-                              _NAN, _NAN, _NAN, fixed_net, len(sizes_usd), n_abs)
+                              _NAN, _NAN, _NAN, fixed_net, len(sizes_usd), n_abs, first_abs)
     pos = {s: d for s, d in valid.items() if d["net"] > 0}
     breakeven = max(pos)                                                   # plus grande taille net>0 = capacite
     size_90 = max((s for s, d in pos.items() if d["net"] >= 0.9 * b["net"]), default=best_s)
     return QuotedDecision(pair, va, vb, direction, "POSITIF", "",
                           b["gross"], ge, gl, gm, gt, b["net"], best_s, b["net"],
-                          breakeven, size_90, breakeven, fixed_net, len(sizes_usd), n_abs)
+                          breakeven, size_90, breakeven, fixed_net, len(sizes_usd), n_abs, first_abs)
 
 
 def evaluate_route_quoted(pair, va, vb, pool_a, pool_b, sizes_usd, fixed_size_usd,
@@ -120,3 +122,15 @@ def classify_calibration(frac_positive: float, longest_streak: int, min_blocks_o
     if frac_positive >= p_min and longest_streak >= streak_min and min_blocks_ok:
         return "A_OBSERVER"                      # persistance mesuree suffisante (a notre cadence horaire)
     return "A_OBSERVER_COURT"                    # PnL>0 mais persistance sous le seuil long
+
+
+def classify_window(frac_positive, longest_streak, min_blocks_ok, pnl_net_usd, capacity_usd,
+                    p_min, streak_min, margin_usd, cap_min_usd, allow_forward) -> str:
+    """Fenetre LONGUE (7-14 j) : meme echelle descriptive, mais CANDIDAT_FORWARD devient possible SI
+    (et seulement si) toutes les portes passent — persistance + marge + capacite (gel #3). allow_forward
+    reste False en calibration technique (gel #1)."""
+    base = classify_calibration(frac_positive, longest_streak, min_blocks_ok, p_min, streak_min)
+    if base == "A_OBSERVER" and allow_forward and pnl_net_usd >= margin_usd \
+            and capacity_usd == capacity_usd and capacity_usd >= cap_min_usd:
+        return "CANDIDAT_FORWARD"
+    return base

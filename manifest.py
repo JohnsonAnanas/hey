@@ -135,12 +135,16 @@ def persist(m: dict) -> str:
 
 
 def write_manifest(*, slug, hypothesis, command, period, sources, inputs, universe, costs,
-                   result, verdict, notes="") -> tuple[str, dict]:
-    """API programmatique (runner) : construit + ecrit le manifeste. Renvoie (run_dir, manifest)."""
+                   result, verdict, notes="", extra=None) -> tuple[str, dict]:
+    """API programmatique (runner) : construit + ecrit le manifeste. Renvoie (run_dir, manifest).
+    `extra` (dict) = distinctions structurees ajoutees sous m['details'] (verdict eligible, abstentions,
+    reverts ventiles, routes par paire/type, plage de blocs/grille/seuils/version de code)."""
     from argparse import Namespace
     m = build(Namespace(slug=slug, hypothesis=hypothesis, command=command, period=period,
                         source=list(sources), input=list(inputs), universe=universe,
                         costs=costs, result=result, verdict=verdict, notes=notes))
+    if extra:
+        m["details"] = extra
     return persist(m), m
 
 
