@@ -1,92 +1,88 @@
-# Dossier — sources officielles candidates (funding cash-and-carry, ETH)
+# Dossier — reconnaissance des sources officielles (funding cash-and-carry, ETH)
 
-> **Reconnaissance documentaire PRÉLIMINAIRE, présentée pour validation humaine.** Aucune collecte,
-> aucun appel réseau, aucun code, **aucune doc officielle lue à ce stade**. Périmètre minimal proposé :
-> **ETH spot + ETH perp sur UNE SEULE venue** (pas de multi-venue ; cf `funding_acquisition_spec.md
-> §11`). **Annexe A NON remplie. Aucune venue recommandée ni choisie par défaut.**
+> **Reconnaissance documentaire RÉALISÉE (docs officielles uniquement, aucun appel aux endpoints de
+> données). Date d'accès : 2026-06-23 UTC.** Périmètre : **ETH spot + ETH perp sur UNE SEULE venue**
+> (pas de multi-venue ; `funding_acquisition_spec.md §11`).
 >
-> Tout ci-dessous est **HYPOTHÈSE / candidat à VÉRIFIER** par **reconnaissance documentaire officielle**
-> (permise, autorisée humainement — spec §1bis), selon le **protocole §6**. Rien ne fait foi tant que la
-> doc officielle n'est pas lue et sourcée. **La liquidité n'est pas une donnée documentaire** et ne sert
-> pas au choix à ce stade.
+> **Décision humaine (2026-06-23) : OKX** (couple `ETH-USDT` spot + `ETH-USDT-SWAP` perp linéaire USDT),
+> **Binance conservée comme alternative NON retenue**. Le choix repose **uniquement** sur la **rétention
+> d'historique funding documentée** — **pas** sur une promesse de rentabilité ni de liquidité (exclue,
+> §6). Le périmètre + la fenêtre sont figés dans `funding_acquisition_spec.md` **Annexe A**.
+>
+> Les valeurs **par instrument** (`ctVal`, `ctMult`, cap/floor, intervalle effectif) sont **dynamiques**
+> et **non lues ici** : à capturer/archiver/hasher au début de l'acquisition (Annexe A.3). **Les exemples
+> numériques de documentation ne sont PAS des paramètres certifiés d'`ETH-USDT-SWAP`.**
 
-## 1. Périmètre minimal proposé
+## 1. Périmètre retenu
 
-- **ETH spot + ETH perpétuel sur une seule venue CEX** (spot et perp co-localisés → delta-neutre
-  propre, marge/règlement en USDT). **Pas de sélection ni bascule multi-venue** (mécanisme futur séparé).
-- Contrat perp **linéaire USDT-margin** privilégié (la jambe spot `ETH/USDT` matche la quote du perp) —
-  **à vérifier** ; coin-margined (inverse) écarté pour ce premier test (marge en ETH → complexité).
+- **OKX**, single-venue : spot `ETH-USDT` + perp `ETH-USDT-SWAP` (linéaire, marge/règlement USDT).
+- **Pas de sélection ni bascule multi-venue** (mécanisme futur séparé). **Aucune collecte** tant que
+  l'Annexe A n'est pas validée+commitée et la première collecte explicitement autorisée.
 
-## 2. Candidats (déjà en jeu dans le projet)
+## 2. Candidats
 
-- **Binance**, **OKX** — déjà utilisées par `funding_regime.py` (ccxt). **Candidats à égalité.**
-- *(Bybit = candidat tiers commun ; hors périmètre minimal sauf décision explicite.)*
+- **OKX — RETENU.** | **Binance — alternative NON retenue** (conservée pour mémoire, §5).
 
-## 3. Grille à vérifier (par reconnaissance documentaire officielle)
+## 3. Grille de reconnaissance (remplie, sources officielles)
 
-> Cellules = **hypothèses à confirmer** ; aucune valeur n'est figée tant que la doc officielle n'est pas
-> lue et sourcée (§6).
+| Point | **OKX** `ETH-USDT-SWAP` *(retenu)* | **Binance** `ETHUSDT` USDⓈ-M *(alternative)* | Réf. |
+|---|---|---|---|
+| Spot ETH (id) | `ETH-USDT` | `ETHUSDT` | [2] / [8] |
+| Perp (`perp_market_id`) | `ETH-USDT-SWAP` | `ETHUSDT` (USDⓈ-M perp) | [2] / [5][9] |
+| Type de contrat | linéaire (`ctType=linear`) | linéaire (USDⓈ-M) | [2] / [5] |
+| Devise marge/règlement | USDT (`settleCcy`) | USDT (`marginAsset`) | [2] / [5] |
+| Multiplicateur/unité | `ctVal × ctMult` — **DYNAMIQUE → capturer à t0 (Annexe A.3)** | **quantité en ETH, aucun multiplicateur** | [2] / [5] |
+| Intervalle + calendrier | 8 h déf. 00:00/08:00/16:00 UTC (1/2/4 h possible) ; **effectif = dynamique** | 8 h, 00:00/08:00/16:00 UTC | [1] / [4] |
+| Convention de signe | funding > 0 ⇒ **longs paient shorts** | funding > 0 ⇒ **longs paient shorts** | [1] / [4] |
+| Fixation / settlement | settlement 00/08/16 UTC ; premium moyenné (n=480/min) | settlement 00/08/16 UTC ; premium moyenné | [1] / [4] |
+| Cap funding (formule) | `clamp[(avgP+clamp(int−avgP,±0,05%))/(8/N), cap, floor]` ; **cap/floor par instrument = dynamique** | `[avgP+clamp(int−P,±0,05%)]/(8/N)` ; cap/floor = **±0,75 × Maintenance Margin Ratio** ; `adjustedFundingRateCap/Floor` par symbole | [1] / [4][6] |
+| Endpoint funding documenté | `GET /api/v5/public/funding-rate-history` | `GET /fapi/v1/fundingInfo` + `GET /fapi/v1/fundingRate` | [2] / [6b][7] |
+| Historique — pagination/limites | `before/after/limit` (**max à confirmer**) + téléchargement *Historical Market Data* | `limit` déf. 100 / **max 1000**, `startTime/endTime`, ordre croissant, 500/5min | [2][3] / [7] |
+| **Rétention ≥ 1 an** | ✅ **DOCUMENTÉE** : « *Historical perpetual funding rates from March 2022 onwards* » | ❌ **NON documentée** dans la doc API (rétention non précisée) | **[3] / [7]** |
 
-| Point à vérifier | Binance (hypothèse) | OKX (hypothèse) |
-|---|---|---|
-| Marché **spot** ETH (id) | `ETHUSDT` ? | `ETH-USDT` ? |
-| Marché **perp** ETH (`perp_market_id`) | `ETHUSDT` (USDⓈ-M) ? | `ETH-USDT-SWAP` ? |
-| **Type de contrat** | linéaire USDT-M ? | linéaire USDT ? |
-| **Devise de marge/règlement** | USDT ? | USDT ? |
-| **Multiplicateur/unité** | ? | ? (contractSize) |
-| **Intervalle de funding + calendrier** | ? | ? |
-| **Convention de signe** | ? | ? |
-| **Instants fixation / settlement** | ? | ? |
-| **Cap de funding (formule + plafond)** | ? | ? |
-| **Endpoint funding documenté** | ? | ? |
-| **Endpoint historique funding + profondeur** | ? | ? |
+> **Restent dynamiques / non documentaires** (à obtenir et archiver+hasher à t0, jamais figés en dur) :
+> `ctVal`, `ctMult`, cap/floor par instrument, intervalle effectif. **`limit` max OKX** et **couverture
+> par instrument / granularité du téléchargement OKX** : à confirmer au démarrage.
 
-*(Les ids `ETHUSDT` / `ETH-USDT-SWAP` et le type linéaire USDT-M sont des **repères usuels à vérifier**,
-**pas** des faits.)*
+## 4. Différenciateur décisif
 
-## 4. Hypothèses à vérifier *(rien de documenté tant que la doc officielle n'est pas lue)*
+Mécanismes équivalents (8 h, 00/08/16 UTC, longs paient shorts, clamp cap/floor). Le **seul critère
+documentaire décisif** pour une **série d'un an certifiée** = la **rétention d'historique funding** :
+**OKX la documente** (mars 2022→) ; **Binance ne la documente pas**.
 
-> Aucune doc officielle n'a été lue : les points ci-dessous sont des **hypothèses/candidats à VÉRIFIER**,
-> **pas** des contraintes documentées.
+## 5. Décision & alternative
 
-- **Hypothèse** : Binance et OKX auraient chacune **ETH spot + perp USDT-M sur la même venue**
-  (single-venue) — **à vérifier**.
-- **Hypothèse** : existence d'un **mécanisme de funding documenté** et d'un **endpoint d'historique de
-  funding** (qui permettrait un backfill certifié) — **à vérifier** (rien de lu).
-- **Hypothèse** : **convention de signe** et **cap** publiés par venue — **à vérifier**, puis **à
-  certifier à l'acquisition** (spec §0/§9).
-- Risque générique (non spécifique) : **ToS / retrait / contrepartie** — **à vérifier** au vetting
-  (spec §5.6/§10).
+- **RETENU : OKX** — `ETH-USDT` spot + `ETH-USDT-SWAP` perp (linéaire USDT). **Motif unique : rétention
+  funding documentée** (≥ 1 an). Pas de promesse de rentabilité/liquidité.
+- **NON retenu : Binance** (conservé). **Avantages documentés** : contrat dénommé en ETH **sans
+  multiplicateur** ; `fundingInfo` par symbole explicite (cap/floor/intervalle) ; docs par endpoint
+  (limit max 1000). **Réserve qui l'écarte** : **rétention funding non documentée** (doc API).
+- **Réversibilité** : si une vérification documentaire ultérieure établit une rétention funding Binance
+  ≥ 1 an, ses avantages (contrat simple, `fundingInfo` explicite) pourraient justifier un réexamen —
+  **décision humaine**.
 
-## 5. Pas de recommandation à ce stade
+## 6. Protocole de reconnaissance documentaire (appliqué)
 
-- **Aucune doc officielle n'a été lue → aucune venue n'est recommandée ni écartée.** Binance et OKX sont
-  des **candidats à égalité** jusqu'à la reconnaissance documentaire (protocole §6).
-- **La liquidité n'est PAS une donnée documentaire** : elle **ne sert pas au choix** à ce stade.
-- Un choix de venue ne sera **proposé qu'après** la reconnaissance documentaire (grille §3 remplie sur
-  **sources officielles**) et **validé humainement**.
+Pour chaque point de la grille §3 : **source officielle uniquement** ; **URL exacte** ; **date d'accès
+(UTC)** ; **version/date de la doc** si dispo ; **extrait** verbatim (cf §7). Règles : **aucun appel aux
+endpoints de données** (on lit la doc, pas les données) ; **la liquidité n'est pas une donnée
+documentaire** (hors critères) ; un point non sourçable reste « à vérifier ».
 
-## 6. Protocole de reconnaissance documentaire
+## 7. Sources (accès 2026-06-23 UTC)
 
-Toute caractéristique vérifiée doit être **traçable**. Pour **chaque** point de la grille §3, consigner :
+1. **OKX — Funding fee mechanism** (help, MAJ 2026-06-03) — https://www.okx.com/en-us/help/iv-introduction-to-perpetual-swap-funding-fee — « *every 8 hours (00:00, 08:00, and 16:00 UTC) by default…* » ; « *When the funding rate is positive, traders with long positions pay a funding fee to traders with short positions.* » ; formule clamp cap/floor.
+2. **OKX — API guide docs-v5** (Get instruments ; Get funding rate history) — https://www.okx.com/docs-v5/en/ — `ctVal`, `ctMult`, `ctType:"linear"`, `settleCcy` ; instId `ETH-USDT-SWAP` / `ETH-USDT` ; params `instId, before, after, limit`.
+3. **OKX — Historical Market Data** — https://www.okx.com/en-us/historical-data — « *Historical perpetual funding rates from March 2022 onwards.* » (couverture par instrument & granularité **non précisées** sur la page → à confirmer).
+4. **Binance — Introduction to Futures Funding Rates** (FAQ, MAJ 2026-03-06) — https://www.binance.com/en/support/faq/introduction-to-binance-futures-funding-rates-360033525031 — « *default funding interval is every 8 hours at 00:00, 08:00, and 16:00 (UTC)* » ; « *traders long… will pay a funding fee to traders on the opposing side* » ; « *Cap = 0.75 \* Maintenance Margin Ratio* ».
+5. **Binance — USDⓈ-M Exchange Information** — https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Exchange-Information — `contractType:"PERPETUAL"`, `marginAsset:"USDT"`, quantité en actif de base, **pas de multiplicateur** (schéma ; valeurs ETHUSDT via endpoint).
+6. **Binance — Get Funding Info** — https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Get-Funding-Rate-Info — `"adjustedFundingRateCap":"0.025"`, `"adjustedFundingRateFloor":"-0.025"`, `"fundingIntervalHours":8` (**exemples**, non certifiés pour ETHUSDT). 6b. *Funding endpoint* `GET /fapi/v1/fundingInfo`.
+7. **Binance — Get Funding Rate History** — https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Get-Funding-Rate-History — « *Default 100; max 1000* » ; `startTime/endTime` inclusifs ; « *In ascending order.* » ; **rétention non précisée** (« does not specify how far back »).
+8. **Binance — Spot, General endpoints / Exchange Information** — https://developers.binance.com/docs/binance-spot-api-docs/rest-api/general-endpoints — `symbol` / `baseAsset:"ETH"` / `quoteAsset:"USDT"` (schéma).
+9. **Binance — ETHUSDT USDⓈ-Margined Perpetual** (produit) — https://www.binance.com/en/futures/ethusdt.
 
-- **Source officielle uniquement** (doc/API officielle de la venue ; **jamais** un agrégateur ou un
-  tiers).
-- **URL exacte** de la page consultée.
-- **Date d'accès** (UTC).
-- **Version / date de la documentation** si disponible.
-- **Extrait** cité (verbatim) **ou hash** de l'artefact documentaire (capture).
+## 8. Prochaine étape (hors de ce dossier)
 
-Règles :
-- **Aucun appel aux endpoints de données de marché** (funding, prix, klines…) : on lit la **doc**, pas
-  les données (spec §1bis).
-- **La liquidité n'est pas une donnée documentaire** → **hors critères** de choix à ce stade.
-- Un point **non sourçable** reste **« à vérifier »** ; il **n'est jamais promu en fait**.
-
-## 7. Prochaine étape (après ta validation + commit)
-
-Sur ton autorisation : **reconnaissance documentaire officielle** des candidats (lecture de leur doc
-funding — permis §1bis, **selon le protocole §6, aucune collecte**) → remplir la **grille §3** avec
-sources/URL/date/extrait → **alors** proposer une **venue** et la/les **ligne(s) Annexe A.1** (ETH spot
-+ ETH perp) **pour validation**. **Aucune collecte ni réseau** tant que l'Annexe A n'est pas remplie et
-validée.
+Après **validation + commit** de cette décision (Annexe A figée) : sur **autorisation explicite** de la
+première collecte, **capturer les métadonnées dynamiques** (Annexe A.3) — archivées + hashées +
+horodatées — **puis** collecter l'historique funding `ETH-USDT-SWAP` sur la fenêtre figée. **Aucune
+collecte ni réseau** avant cette autorisation.

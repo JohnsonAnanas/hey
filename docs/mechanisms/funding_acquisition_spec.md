@@ -152,20 +152,69 @@ collecte ni appel réseau tant que ① (spec + Annexe A) n'est pas validé.**
 
 ---
 
-## Annexe A — À figer et valider AVANT toute collecte
+## Annexe A — Périmètre FIGÉ (décision humaine 2026-06-23)
 
-> **GATE de collecte.** Tant que **A.1 (univers)** OU **A.2 (fenêtre)** est **vide ou non validé**,
-> **AUCUNE collecte et AUCUN appel réseau ne sont autorisés.**
+> **GATE en DEUX PHASES** — *A.3 bloque le **backfill**, pas son propre premier appel.*
+> - **Phase 0 — métadonnées + sonde de capacité** : appel réseau **séparément autorisable**,
+>   **strictement borné** aux **paramètres d'instrument** (A.3) et à la **vérification de capacité de la
+>   source historique** (A.4). **Aucune pagination complète, aucune collecte de série.**
+> - **Phase 1 — backfill** : **INTERDIT tant que** les métadonnées A.3 ne sont pas **capturées,
+>   archivées, hashées ET validées**. C'est **A.3 validée** qui débloque la Phase 1.
+> - Préalables communs : Annexe **validée + commitée**, **et** autorisation humaine **explicite** de la
+>   phase concernée (Phase 0 et Phase 1 autorisées **séparément**).
 
-### A.1 Univers à figer avant collecte — *table OBLIGATOIRE (vide = collecte INTERDITE)*
+### A.1 Univers figé — *single-venue, single-pair (pas de multi-venue, §11)*
 
-| venue | `perp_market_id` | sous-jacent | type de contrat | devise marge/règlement | multiplicateur | endpoint primaire |
-|---|---|---|---|---|---|---|
-| *(à remplir et valider humainement — aucune ligne ⇒ collecte interdite)* | | | | | | |
+Décision humaine (2026-06-23) : **OKX**, couple **spot `ETH-USDT` + perp `ETH-USDT-SWAP`** (linéaire
+USDT). Motif : **rétention d'historique funding documentée** (cf `funding_source_recon.md`) — **pas**
+une promesse de rentabilité ni de liquidité.
 
-### A.2 Fenêtre temporelle à figer — *GATE (à remplir + valider avant tout appel réseau)*
+| venue | `perp_market_id` | spot apparié | sous-jacent | type de contrat | devise marge/règlement |
+|---|---|---|---|---|---|
+| **OKX** | `ETH-USDT-SWAP` | `ETH-USDT` | ETH | linéaire (USDT) | USDT |
 
-- `start_utc` = **__________** *(à remplir)*
-- `end_utc` = **__________** *(à remplir)*
-- `≥ 1 an` reste un **objectif de couverture**, jamais un défaut : la fenêtre exacte est **explicite et
-  gelée ici** avant toute collecte.
+### A.2 Fenêtre temporelle figée
+
+- `start_utc` = **`2025-06-23T00:00:00Z`**
+- `end_utc` = **`2026-06-23T00:00:00Z`**
+- Fenêtre **exacte d'un an**, gelée avant toute collecte (`≥ 1 an` = objectif, ici figé).
+
+### A.3 Métadonnées DYNAMIQUES — capturées en **Phase 0**, à archiver + hasher + horodater (débloquent la Phase 1)
+
+Paramètres **dépendant du marché et variant dans le temps** : **PAS** figés en dur. **Sources séparées
+par paramètre — ne pas supposer qu'un seul endpoint les porte tous** :
+
+| Paramètre (dynamique) | Source officielle (à confirmer en Phase 0) | Obligation |
+|---|---|---|
+| `ctVal` (taille de contrat), `ctMult` (multiplicateur), `ctType`, `settleCcy` | **endpoint instruments** : OKX `GET /api/v5/public/instruments` (instId `ETH-USDT-SWAP`) | capturer + archiver + hasher + horodater |
+| `cap` / `floor` de funding (par instrument) | **endpoint funding courant** : OKX `GET /api/v5/public/funding-rate` **ou** autre **source officielle documentée** — **ne PAS supposer** que `instruments` les porte | idem |
+| **intervalle de funding EFFECTIF** (peut différer de 8 h) | **endpoint funding courant** OKX `GET /api/v5/public/funding-rate` **ou** autre source officielle documentée | idem |
+
+> **Les exemples numériques de la documentation ne sont PAS des paramètres certifiés d'`ETH-USDT-SWAP`**
+> (ex. `ctVal = 0,1 ETH`, `cap = 0,025` étaient des **exemples** de doc). Seules les valeurs **capturées
+> en Phase 0, archivées et hashées** font foi.
+
+### A.4 Source du backfill d'un an — à TRANCHER par sonde de capacité (Phase 0)
+
+Deux sources OKX **distinctes**, à **ne pas confondre** :
+- **REST** `GET /api/v5/public/funding-rate-history` (l'endpoint funding) — **rétention NON documentée**
+  (cf `funding_source_recon.md` [2]/[7]). Capacité à couvrir la fenêtre **inconnue**.
+- **Dataset** *Historical Market Data* (téléchargement) — rétention **documentée « depuis mars 2022 »**
+  ([3]), mais **couverture par instrument / granularité non précisées**.
+
+→ La **source du backfill d'un an n'est pas figée**. La **Phase 0** exécute une **sonde de capacité
+strictement bornée** (p. ex. **une requête minimale par source, sans pagination complète**) pour
+déterminer **laquelle** (REST paginé et/ou dataset) couvre réellement `ETH-USDT-SWAP` sur
+`2025-06-23 → 2026-06-23`. **Aucune pagination complète ni collecte de série avant validation** du
+résultat de la sonde.
+
+### A.5 — Reçus de Phase 0 (chaque appel produit un reçu archivé + hashé)
+
+**Chaque appel de Phase 0** — métadonnées (A.3) **et** sonde de capacité (A.4) — produit un **reçu
+immuable** : **URL + paramètres exacts**, **timestamp (UTC)**, **réponse brute**, **hash (sha256)**, et
+un **manifeste de Phase 0** (`manifest.py`) rattachant version de code ↔ reçus.
+
+Ces reçus servent **uniquement** à **valider les paramètres d'instrument** (A.3) et la **capacité de la
+source historique** (A.4). Ils **ne constituent PAS une série funding certifiée**, **ne sont PAS
+agrégés**, et **ne servent NI à calibrer NI à tester** une stratégie. La série certifiée ne naît qu'en
+**Phase 1**, après validation (contrat §4).
