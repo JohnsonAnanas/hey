@@ -20,6 +20,7 @@ __pycache__/
 data/**
 !data/**/
 !data/**/QUARANTINE.md
+!data/README.md
 
 # Types lourds, où qu'ils soient (les manifestes sont en .json/.md -> suivis)
 *.csv
