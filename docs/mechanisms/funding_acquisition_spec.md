@@ -163,15 +163,18 @@ collecte ni appel réseau tant que ① (spec + Annexe A) n'est pas validé.**
 > - Préalables communs : Annexe **validée + commitée**, **et** autorisation humaine **explicite** de la
 >   phase concernée (Phase 0 et Phase 1 autorisées **séparément**).
 
-### A.1 Univers figé — *single-venue, single-pair (pas de multi-venue, §11)*
+### A.1 Univers figé — *source de DONNÉES funding (single-pair ; pas de multi-venue, §11)*
 
-Décision humaine (2026-06-23) : **OKX**, couple **spot `ETH-USDT` + perp `ETH-USDT-SWAP`** (linéaire
-USDT). Motif : **rétention d'historique funding documentée** (cf `funding_source_recon.md`) — **pas**
-une promesse de rentabilité ni de liquidité.
+**Décision humaine (2026-06-23) — pivot de SOURCE D'ACQUISITION : Binance**, pour la **faisabilité de
+données** (REST funding `startTime`/`endTime` à sémantique **non ambiguë**). **OKX conservé comme source
+NON CONCLUANTE, non rejetée** (REST `before/after` ambigu — Phase 0R ; dataset non identifiable — Phase 0D).
+**Ce choix ne conclut RIEN sur la venue de trading future** (séparation données ↔ venue ; ni rentabilité
+ni liquidité).
 
-| venue | `perp_market_id` | spot apparié | sous-jacent | type de contrat | devise marge/règlement |
+| source données | `perp_market_id` | spot apparié | sous-jacent | type de contrat | devise marge/règlement |
 |---|---|---|---|---|---|
-| **OKX** | `ETH-USDT-SWAP` | `ETH-USDT` | ETH | linéaire (USDT) | USDT |
+| **Binance** USDⓈ-M | `ETHUSDT` | `ETHUSDT` (spot) | ETH | linéaire (USDT-margin), **dénommé en ETH** | USDT |
+| *(OKX `ETH-USDT-SWAP` — source NON CONCLUANTE, conservée pour mémoire)* | | | | | |
 
 ### A.2 Fenêtre temporelle figée
 
@@ -184,29 +187,29 @@ une promesse de rentabilité ni de liquidité.
 Paramètres **dépendant du marché et variant dans le temps** : **PAS** figés en dur. **Sources séparées
 par paramètre — ne pas supposer qu'un seul endpoint les porte tous** :
 
-| Paramètre (dynamique) | Source officielle (à confirmer en Phase 0) | Obligation |
+| Paramètre (dynamique) | Source officielle (Binance USDⓈ-M, à capturer en Phase 0) | Obligation |
 |---|---|---|
-| `ctVal` (taille de contrat), `ctMult` (multiplicateur), `ctType`, `settleCcy` | **endpoint instruments** : OKX `GET /api/v5/public/instruments` (instId `ETH-USDT-SWAP`) | capturer + archiver + hasher + horodater |
-| `cap` / `floor` de funding (par instrument) | **endpoint funding courant** : OKX `GET /api/v5/public/funding-rate` **ou** autre **source officielle documentée** — **ne PAS supposer** que `instruments` les porte | idem |
-| **intervalle de funding EFFECTIF** (peut différer de 8 h) | **endpoint funding courant** OKX `GET /api/v5/public/funding-rate` **ou** autre source officielle documentée | idem |
+| `adjustedFundingRateCap` / `adjustedFundingRateFloor`, `fundingIntervalHours` (par symbole) | **endpoint funding info** : `GET /fapi/v1/fundingInfo` | capturer + archiver + hasher + horodater |
+| contrat (type, `marginAsset`, dénomination, multiplicateur) | **documenté** : USDⓈ-M ETHUSDT = **linéaire, USDT-margin, dénommé en ETH, sans multiplicateur** ([5]) ; **non re-capturé** (exchangeInfo lourd) | référencer la doc + le hash du run |
 
-> **Les exemples numériques de la documentation ne sont PAS des paramètres certifiés d'`ETH-USDT-SWAP`**
-> (ex. `ctVal = 0,1 ETH`, `cap = 0,025` étaient des **exemples** de doc). Seules les valeurs **capturées
-> en Phase 0, archivées et hashées** font foi.
+> **Les exemples numériques de la documentation ne sont PAS des paramètres certifiés d'`ETHUSDT`**
+> (ex. `adjustedFundingRateCap = 0,025` était un **exemple** de doc). Seules les valeurs **capturées en
+> Phase 0 (`fundingInfo`), archivées et hashées** font foi.
 
-### A.4 Source du backfill d'un an — à TRANCHER par sonde de capacité (Phase 0)
+### A.4 Source du backfill d'un an — Binance REST (sémantique NON ambiguë)
 
-Deux sources OKX **distinctes**, à **ne pas confondre** :
-- **REST** `GET /api/v5/public/funding-rate-history` (l'endpoint funding) — **rétention NON documentée**
-  (cf `funding_source_recon.md` [2]/[7]). Capacité à couvrir la fenêtre **inconnue**.
-- **Dataset** *Historical Market Data* (téléchargement) — rétention **documentée « depuis mars 2022 »**
-  ([3]), mais **couverture par instrument / granularité non précisées**.
+**Source retenue (données) : Binance** `GET /fapi/v1/fundingRate` — pagination par **`startTime` /
+`endTime` (ms, INCLUSIFS, ordre croissant)** ([7]), donc **sans ambiguïté** (≠ `before/after` OKX).
+`limit` défaut 100 / max 1000.
 
-→ La **source du backfill d'un an n'est pas figée**. La **Phase 0** exécute une **sonde de capacité
-strictement bornée** (p. ex. **une requête minimale par source, sans pagination complète**) pour
-déterminer **laquelle** (REST paginé et/ou dataset) couvre réellement `ETH-USDT-SWAP` sur
-`2025-06-23 → 2026-06-23`. **Aucune pagination complète ni collecte de série avant validation** du
-résultat de la sonde.
+**Sonde de capacité (Phase 0), strictement bornée, UNE requête** : `fundingRate?symbol=ETHUSDT` avec
+**`startTime` = début de fenêtre figée** (`2025-06-23T00:00:00Z`), **`endTime` = +2 jours**, **`limit`
+faible**, **sans pagination**.
+- **Critère A.4 unique** : des **règlements `ETHUSDT` proches du `2025-06-23`** sont retournés ⇒ source
+  **CAPABLE** pour cette fenêtre. **Sinon ⇒ source NON CAPABLE** pour cette fenêtre.
+
+*(OKX reste NON CONCLUANTE, conservée non rejetée : REST `before/after` ambigu — Phase 0R ; dataset non
+identifiable — Phase 0D.)*
 
 ### A.5 — Reçus de Phase 0 (chaque appel produit un reçu archivé + hashé)
 

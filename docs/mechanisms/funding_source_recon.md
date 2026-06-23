@@ -4,10 +4,12 @@
 > données). Date d'accès : 2026-06-23 UTC.** Périmètre : **ETH spot + ETH perp sur UNE SEULE venue**
 > (pas de multi-venue ; `funding_acquisition_spec.md §11`).
 >
-> **Décision humaine (2026-06-23) : OKX** (couple `ETH-USDT` spot + `ETH-USDT-SWAP` perp linéaire USDT),
-> **Binance conservée comme alternative NON retenue**. Le choix repose **uniquement** sur la **rétention
-> d'historique funding documentée** — **pas** sur une promesse de rentabilité ni de liquidité (exclue,
-> §6). Le périmètre + la fenêtre sont figés dans `funding_acquisition_spec.md` **Annexe A**.
+> **Décision humaine (2026-06-23) — MISE À JOUR (pivot d'acquisition) : SOURCE DE DONNÉES = Binance**
+> (`ETHUSDT` USDⓈ-M), pour la **faisabilité de données** (funding REST `startTime`/`endTime` non
+> ambigus). **OKX conservé comme source NON CONCLUANTE, non rejetée** (Phase 0R REST `before/after`
+> ambigu ; Phase 0D dataset non identifiable). **Ce pivot ne conclut RIEN sur la venue de trading
+> future** (séparation données ↔ venue) — ni rentabilité ni liquidité (exclue, §6). Périmètre + fenêtre :
+> `funding_acquisition_spec.md` **Annexe A**.
 >
 > Les valeurs **par instrument** (`ctVal`, `ctMult`, cap/floor, intervalle effectif) sont **dynamiques**
 > et **non lues ici** : à capturer/archiver/hasher au début de l'acquisition (Annexe A.3). **Les exemples
@@ -25,7 +27,7 @@
 
 ## 3. Grille de reconnaissance (remplie, sources officielles)
 
-| Point | **OKX** `ETH-USDT-SWAP` *(retenu)* | **Binance** `ETHUSDT` USDⓈ-M *(alternative)* | Réf. |
+| Point | **OKX** `ETH-USDT-SWAP` *(source NON CONCLUANTE, conservée)* | **Binance** `ETHUSDT` USDⓈ-M *(SOURCE DONNÉES retenue)* | Réf. |
 |---|---|---|---|
 | Spot ETH (id) | `ETH-USDT` | `ETHUSDT` | [2] / [8] |
 | Perp (`perp_market_id`) | `ETH-USDT-SWAP` | `ETHUSDT` (USDⓈ-M perp) | [2] / [5][9] |
@@ -50,16 +52,17 @@ Mécanismes équivalents (8 h, 00/08/16 UTC, longs paient shorts, clamp cap/floo
 documentaire décisif** pour une **série d'un an certifiée** = la **rétention d'historique funding** :
 **OKX la documente** (mars 2022→) ; **Binance ne la documente pas**.
 
-## 5. Décision & alternative
+## 5. Décision & statut des sources *(MISE À JOUR 2026-06-23 — pivot d'acquisition)*
 
-- **RETENU : OKX** — `ETH-USDT` spot + `ETH-USDT-SWAP` perp (linéaire USDT). **Motif unique : rétention
-  funding documentée** (≥ 1 an). Pas de promesse de rentabilité/liquidité.
-- **NON retenu : Binance** (conservé). **Avantages documentés** : contrat dénommé en ETH **sans
-  multiplicateur** ; `fundingInfo` par symbole explicite (cap/floor/intervalle) ; docs par endpoint
-  (limit max 1000). **Réserve qui l'écarte** : **rétention funding non documentée** (doc API).
-- **Réversibilité** : si une vérification documentaire ultérieure établit une rétention funding Binance
-  ≥ 1 an, ses avantages (contrat simple, `fundingInfo` explicite) pourraient justifier un réexamen —
-  **décision humaine**.
+- **Source de DONNÉES retenue : Binance** (`ETHUSDT` USDⓈ-M) — pour la **faisabilité d'acquisition** :
+  funding REST `GET /fapi/v1/fundingRate` à **`startTime`/`endTime` non ambigus** (≠ `before/after` OKX).
+  **Ne conclut RIEN sur la venue de trading future** (séparation données ↔ venue).
+- **OKX — NON CONCLUANTE, conservée (non rejetée)** : REST `funding-rate-history` à sémantique
+  `before/after` **ambiguë** (Phase 0R → `REST_NON_CONCLUANT`) ; dataset *Historical Market Data*
+  **non identifiable documentairement** (Phase 0D → `NON_CONCLUANT`). Rétention *annoncée* (mars 2022→)
+  mais **non vérifiée**.
+- **Rappel** : la liquidité n'est pas un critère ; ce pivot est **purement une question de faisabilité
+  de données**, pas un choix de venue ni une promesse de rentabilité. Phase 0B = sonde Binance bornée.
 
 ## 6. Protocole de reconnaissance documentaire (appliqué)
 
