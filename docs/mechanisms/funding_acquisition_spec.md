@@ -15,6 +15,19 @@ Acquérir une **donnée brute par marché/venue**, immuable et hashée, dont l'a
 **reconstructible** (doctrine §6). Cette spec **n'établit rien** (ni seuil, ni rendement) ; elle décrit
 l'acquisition. La conception d'une règle d'entrée vient **après**, sur calibration (contrat §4).
 
+## 1bis. Phase de sélection de source — reconnaissance documentaire vs collecte
+
+> Distinction explicite pour la phase actuelle (**sélection de source**), **avant** l'Annexe A.
+
+- **INTERDIT (inchangé)** : **collecte**, **backfill**, et **tout appel aux endpoints de données de
+  marché** (funding, prix, klines, order book…). Reste bloqué jusqu'à validation de l'Annexe A.
+- **PERMIS — sur autorisation humaine, uniquement pour vérifier des candidats** : **reconnaissance
+  documentaire officielle** = lire la **documentation officielle** d'une venue pour vérifier
+  **mécanisme de funding**, **identifiants de marchés** (`perp_market_id`, marché spot), **endpoints
+  documentés**, **historique disponible**, **convention de signe**, **settlement**, **cap**, **type de
+  contrat**, **devise de marge**. On lit la **doc**, **jamais** les endpoints de données ; **aucune
+  donnée de marché n'est collectée**.
+
 ## 2. Venues, marchés & univers FIXE (préenregistré)
 
 - **Liste de venues explicite et figée** : chaque venue nommée, avec son **mécanisme de funding
