@@ -40,6 +40,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
+import requests
 import rlp
 from eth_abi import encode as abi_encode
 from web3 import Web3
@@ -220,6 +221,17 @@ def decode_amount_out(success: bool, ret: bytes):
     return out if out > 0 else None
 
 
+def raw_rpc(url, method, params, timeout=30):
+    """JSON-RPC brut (contrôle total du format geth pour state-override / estimateGas)."""
+    try:
+        r = requests.post(url, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
+                          timeout=timeout)
+        j = r.json()
+        return j.get("result"), j.get("error")
+    except Exception as e:
+        return None, f"{type(e).__name__}: {str(e)[:60]}"
+
+
 def main() -> int:
     prov = provenance()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -242,12 +254,12 @@ def main() -> int:
     }
 
     # --- Connexion archive (Alchemy d'abord) ; health-gate chainId + bloc de tête ---
-    w3 = None
+    w3, rpc_url = None, None
     for url in endpoints("base"):
         try:
             cand = Web3(Web3.HTTPProvider(url, request_kwargs={"timeout": 30}))
             if cand.eth.chain_id == CHAIN_ID and cand.eth.block_number > 0:
-                w3 = cand
+                w3, rpc_url = cand, url
                 break
         except Exception:
             continue
@@ -280,28 +292,29 @@ def main() -> int:
     # --- Calibration de l'enveloppe au bloc de tête (override AUTO-VÉRIFIÉ, estimate_gas, getL1Fee) ---
     bal_slot = mapping_slot(SENDER, WETH_BAL_SLOT_INDEX)
     allow_slot = nested_mapping_slot(SENDER, ROUTER, WETH_ALLOW_SLOT_INDEX)
+    HUGE_HEX = "0x" + HUGE.to_bytes(32, "big").hex()
     override = {SENDER: {"balance": hex(HUGE)},
-                WETH: {"stateDiff": {bal_slot: "0x" + HUGE.to_bytes(32, "big").hex(),
-                                     allow_slot: "0x" + HUGE.to_bytes(32, "big").hex()}}}
-    # auto-vérification de l'override : balanceOf/allowance DOIVENT refléter HUGE, sinon NON_CONCLUANT
-    try:
-        bo = w3.eth.call({"to": WETH, "data": "0x" + (SEL_BALANCEOF + abi_encode(["address"], [SENDER])).hex()},
-                         head, override)
-        al = w3.eth.call({"to": WETH, "data": "0x" + (SEL_ALLOWANCE + abi_encode(["address", "address"],
-                         [SENDER, ROUTER])).hex()}, head, override)
-        if int.from_bytes(bo[-32:], "big") != HUGE or int.from_bytes(al[-32:], "big") != HUGE:
-            return abstain(run_dir, manifest, "state-override non reflété (slots WETH9 ou RPC) -> non fiable")
-    except Exception as e:
-        return abstain(run_dir, manifest, f"state-override refusé par le RPC ({type(e).__name__})")
+                WETH: {"stateDiff": {bal_slot: HUGE_HEX, allow_slot: HUGE_HEX}}}
+    head_hex = hex(head)
+    # auto-vérification de l'override (JSON-RPC brut) : balanceOf/allowance DOIVENT refléter HUGE
+    bo_cd = "0x" + (SEL_BALANCEOF + abi_encode(["address"], [SENDER])).hex()
+    al_cd = "0x" + (SEL_ALLOWANCE + abi_encode(["address", "address"], [SENDER, ROUTER])).hex()
+    bo, e1 = raw_rpc(rpc_url, "eth_call", [{"to": WETH, "data": bo_cd}, head_hex, override])
+    al, e2 = raw_rpc(rpc_url, "eth_call", [{"to": WETH, "data": al_cd}, head_hex, override])
+    if e1 or e2 or bo is None or al is None:
+        return abstain(run_dir, manifest, f"state-override refusé par le RPC ({e1 or e2})")
+    if int(bo, 16) != HUGE or int(al, 16) != HUGE:
+        return abstain(run_dir, manifest, "state-override non reflété (slots WETH9 ou RPC) -> non fiable")
 
     path_head = encode_v3_path([WETH, USDC, WETH], [TIER_A, TIER_B])
     cal_data = exact_input_calldata(path_head, SENDER, in_weth[1000])
     base_fee_head = w3.eth.get_block(head).get("baseFeePerGas") or 0
-    try:
-        gas_units_cal = w3.eth.estimate_gas({"from": SENDER, "to": ROUTER, "value": 0,
-                                             "data": "0x" + cal_data.hex()}, head, override)
-    except Exception as e:
-        return abstain(run_dir, manifest, f"enveloppe non simulable : estimate_gas KO ({type(e).__name__})")
+    g_res, g_err = raw_rpc(rpc_url, "eth_estimateGas",
+                           [{"from": SENDER, "to": ROUTER, "value": "0x0", "data": "0x" + cal_data.hex()},
+                            head_hex, override])
+    if g_err or g_res is None:
+        return abstain(run_dir, manifest, f"enveloppe non simulable : estimate_gas KO ({g_err})")
+    gas_units_cal = int(g_res, 16)
     ser = serialize_dummy_1559(CHAIN_ID, gas_units_cal, ROUTER, cal_data, base_fee_head * 2, 10 ** 6)
     try:
         l1_ret = w3.eth.call({"to": GASORACLE, "data": "0x" + (SEL_GETL1FEE + abi_encode(["bytes"], [ser])).hex()},
@@ -321,12 +334,10 @@ def main() -> int:
         path = encode_v3_path([WETH, USDC, WETH], [fa, fb])
         for s in SIZES_USD:
             data = exact_input_calldata(path, SENDER, in_weth[s])
-            try:
-                gu = w3.eth.estimate_gas({"from": SENDER, "to": ROUTER, "value": 0,
-                                          "data": "0x" + data.hex()}, head, override)
-            except Exception:
-                gu = None
-            gas_units[(oid, s)] = int(gu) if gu else None
+            gr, ge = raw_rpc(rpc_url, "eth_estimateGas",
+                             [{"from": SENDER, "to": ROUTER, "value": "0x0", "data": "0x" + data.hex()},
+                              head_hex, override])
+            gas_units[(oid, s)] = int(gr, 16) if (gr and not ge) else None
 
     # --- Boucle 300 blocs : quotes EXACTES au même bloc + gas complet par bloc ---
     blocks = list(range(head - N_BLOCKS + 1, head + 1))
