@@ -58,11 +58,25 @@ def exec_calldata(orient: str, token_in: str, token_other: str, uni_fee: int, sl
 
 
 def classify(err: dict | None) -> str:
-    """ok / revert (execution reverted) / rpcerror (infra -> NON_CONCLUANT)."""
+    """ok / revert (ECHEC d'EXECUTION deterministe = mort) / rpcerror (INFRA -> NON_CONCLUANT).
+
+    Echec d'execution = revert, invalid opcode, EVM error, out of gas... -> route 'morte'.
+    Infra = timeout, rate limit, missing trie node, connexion... -> NON_CONCLUANT. Inconnu -> rpcerror
+    (conservateur : jamais silencieusement traite comme 'non vivante').
+    """
     if err is None:
         return "ok"
-    msg = err.get("message", "") if isinstance(err, dict) else str(err)
-    return "revert" if ("revert" in msg.lower()) else "rpcerror"
+    msg = (err.get("message", "") if isinstance(err, dict) else str(err)).lower()
+    infra = ["missing trie node", "header not found", "timeout", "timed out", "rate limit", "429",
+             "too many requests", "connection", "could not resolve", "temporarily", "service unavailable",
+             "503", "502", "bad gateway", "try again", "capacity"]
+    if any(k in msg for k in infra):
+        return "rpcerror"
+    execf = ["revert", "invalid opcode", "invalidfeopcode", "evm error", "out of gas", "gas required",
+             "stack underflow", "stack overflow", "invalid jump"]
+    if any(k in msg for k in execf):
+        return "revert"
+    return "rpcerror"   # inconnu -> NON_CONCLUANT
 
 
 def now_utc() -> str:
@@ -167,11 +181,12 @@ def main() -> int:
 
     OVERRIDE = {FAKE: {"code": bytecode, "balance": hex(10 ** 24)},
                 USDC: {"stateDiff": {mapping_slot(FAKE, slot): "0x" + HUGE.to_bytes(32, "big").hex()}}}
-    # --- Code-override honore pour eth_call (INVALID -> revert) ---
-    _, e_inv = raw_rpc(url, "eth_call", [{"from": FROM, "to": FAKE, "data": "0x"},
-                                         head_hex, {FAKE: {"code": "0xfe", "balance": hex(10 ** 24)}}])
-    if classify(e_inv) != "revert":
-        return abstain(run_dir, manifest, "code-override non honore par eth_call (INVALID n'a pas revert)")
+    # --- Code-override honore pour eth_call : bytecode-temoin qui RETOURNE 42 (sans ambiguite) ---
+    RET42 = "0x602a60005260206000f3"   # PUSH1 0x2a; MSTORE; RETURN 32 -> 42
+    r42, e42 = raw_rpc(url, "eth_call", [{"from": FROM, "to": FAKE, "data": "0x"},
+                                         head_hex, {FAKE: {"code": RET42, "balance": hex(10 ** 24)}}])
+    if e42 or not r42 or int(r42, 16) != 42:
+        return abstain(run_dir, manifest, "code-override non honore par eth_call (temoin ne retourne pas 42)")
 
     # --- Liveness des 540 routes, ordre gele ---
     results, order_used = [], []

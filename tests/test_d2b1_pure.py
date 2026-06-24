@@ -14,13 +14,19 @@ def test_exec_calldata_usdc_in():
     assert cd2[:4] == SEL_SLIP_THEN_UNI
 
 
-def test_classify_revert_vs_rpcerror_vs_ok():
+def test_classify_exec_fail_vs_infra_vs_ok():
     assert classify(None) == "ok"
+    # echecs d'EXECUTION deterministes -> "revert" (route morte)
     assert classify({"message": "execution reverted"}) == "revert"
     assert classify({"message": "execution reverted: STF"}) == "revert"
-    assert classify({"message": "missing trie node"}) == "rpcerror"      # infra -> NON_CONCLUANT
+    assert classify({"message": "EVM error: InvalidFEOpcode"}) == "revert"   # le temoin INVALID
+    assert classify({"message": "out of gas"}) == "revert"
+    # INFRA -> "rpcerror" (NON_CONCLUANT)
+    assert classify({"message": "missing trie node"}) == "rpcerror"
     assert classify({"message": "rate limit exceeded"}) == "rpcerror"
-    assert classify({"message": "TimeoutError: ..."}) == "rpcerror"
+    assert classify({"message": "request timed out"}) == "rpcerror"
+    # inconnu -> conservateur (NON_CONCLUANT, jamais silencieusement 'morte')
+    assert classify({"message": "quelque chose d'inattendu"}) == "rpcerror"
 
 
 def test_usdc_montant_250():
