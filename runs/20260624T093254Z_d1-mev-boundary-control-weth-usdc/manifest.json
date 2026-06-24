@@ -1,0 +1,238 @@
+{
+  "phase": "D1",
+  "track": "defi-samechain-mev-boundary",
+  "chain": "base",
+  "pair": "WETH/USDC",
+  "control": "WETH/USDC entre paliers Uniswap v3 500 / 3000 (attendu NO_ATOMIC_EDGE)",
+  "read_only": true,
+  "no_key_no_wallet_no_tx": true,
+  "params": {
+    "sizes_usd": [
+      250,
+      1000,
+      2500,
+      5000,
+      10000
+    ],
+    "min_research_notional": 1000,
+    "n_blocks": 300,
+    "orientations": [
+      "500_3000",
+      "3000_500"
+    ],
+    "tiers": [
+      500,
+      3000
+    ]
+  },
+  "envelope": {
+    "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+    "calldata_model": "exactInput((bytes,address,uint256,uint256))",
+    "tx_type": "eip1559",
+    "gas_units_source": "eth_estimate_gas + state-override (auto-vérifié)",
+    "l1_method": "OP-stack GasPriceOracle.getL1Fee(tx sérialisé, sig factice)"
+  },
+  "created_utc": "2026-06-24T09:32:54Z",
+  "git_hash": "79587e5f50a0fe5920a035c396d1a74b6ff59b57",
+  "runner_path": "d1_mev_boundary_control.py",
+  "runner_sha256": "9c1c84fd3f0afc1ffcc0b4a0b4e8d9084e09cd2546b8630a1a748a557c6612a8",
+  "runner_tracked": true,
+  "runner_status": "clean",
+  "code_versioned": true,
+  "git_dirty": false,
+  "note": "Calibration enveloppe atomique (read-only). Priorité MEV EXCLUE -> upper_bound = BORNE SUPÉRIEURE, pas un PnL. Aucun chemin capital, aucun token cible, aucun bot MEV.",
+  "head_block": 47752114,
+  "identity": {
+    "weth": "0x4200000000000000000000000000000000000006",
+    "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "dec_weth": 18,
+    "dec_usdc": 6,
+    "weth_price_usd_head": 1663.86,
+    "quoter_verified": true
+  },
+  "calibration": {
+    "block": 47752114,
+    "gas_units_l2": 219501,
+    "base_fee_l2_wei": 5000000,
+    "l1_fee_wei_head": 1687668068,
+    "override_self_check": "OK"
+  },
+  "blocks_window": {
+    "first": 47751815,
+    "last": 47752114,
+    "count": 300,
+    "fail_blocks": 0
+  },
+  "input_weth_wei_frozen": {
+    "250": 150252584059717184,
+    "1000": 601010336238868736,
+    "2500": 1502525840597171712,
+    "5000": 3005051681194343424,
+    "10000": 6010103362388686848
+  },
+  "curves_size_to_upper_bound_usd": {
+    "250": {
+      "500_3000": {
+        "n": 300,
+        "median_usd": -1.4988,
+        "max_usd": -1.4793,
+        "min_usd": -1.5154
+      },
+      "3000_500": {
+        "n": 300,
+        "median_usd": -0.2571,
+        "max_usd": -0.2408,
+        "min_usd": -0.2757
+      }
+    },
+    "1000": {
+      "500_3000": {
+        "n": 300,
+        "median_usd": -6.0064,
+        "max_usd": -5.9281,
+        "min_usd": -6.0726
+      },
+      "3000_500": {
+        "n": 300,
+        "median_usd": -1.0398,
+        "max_usd": -0.9748,
+        "min_usd": -1.1142
+      }
+    },
+    "2500": {
+      "500_3000": {
+        "n": 300,
+        "median_usd": -15.0962,
+        "max_usd": -14.9005,
+        "min_usd": -15.2617
+      },
+      "3000_500": {
+        "n": 300,
+        "median_usd": -2.6802,
+        "max_usd": -2.5177,
+        "min_usd": -2.8663
+      }
+    },
+    "5000": {
+      "500_3000": {
+        "n": 300,
+        "median_usd": -30.4669,
+        "max_usd": -30.0754,
+        "min_usd": -30.7978
+      },
+      "3000_500": {
+        "n": 300,
+        "median_usd": -5.636,
+        "max_usd": -5.3111,
+        "min_usd": -6.0082
+      }
+    },
+    "10000": {
+      "500_3000": {
+        "n": 300,
+        "median_usd": -62.0376,
+        "max_usd": -61.2546,
+        "min_usd": -62.6988
+      },
+      "3000_500": {
+        "n": 300,
+        "median_usd": -12.3796,
+        "max_usd": -11.7304,
+        "min_usd": -13.1233
+      }
+    }
+  },
+  "persistence_descriptive": {
+    "500_3000|250": {
+      "blocks": 300,
+      "positive_blocks": 0,
+      "fraction_positive": 0.0,
+      "max_run_positive": 0
+    },
+    "3000_500|250": {
+      "blocks": 300,
+      "positive_blocks": 0,
+      "fraction_positive": 0.0,
+      "max_run_positive": 0
+    },
+    "500_3000|1000": {
+      "blocks": 300,
+      "positive_blocks": 0,
+      "fraction_positive": 0.0,
+      "max_run_positive": 0
+    },
+    "3000_500|1000": {
+      "blocks": 300,
+      "positive_blocks": 0,
+      "fraction_positive": 0.0,
+      "max_run_positive": 0
+    },
+    "500_3000|2500": {
+      "blocks": 300,
+      "positive_blocks": 0,
+      "fraction_positive": 0.0,
+      "max_run_positive": 0
+    },
+    "3000_500|2500": {
+      "blocks": 300,
+      "positive_blocks": 0,
+      "fraction_positive": 0.0,
+      "max_run_positive": 0
+    },
+    "500_3000|5000": {
+      "blocks": 300,
+      "positive_blocks": 0,
+      "fraction_positive": 0.0,
+      "max_run_positive": 0
+    },
+    "3000_500|5000": {
+      "blocks": 300,
+      "positive_blocks": 0,
+      "fraction_positive": 0.0,
+      "max_run_positive": 0
+    },
+    "500_3000|10000": {
+      "blocks": 300,
+      "positive_blocks": 0,
+      "fraction_positive": 0.0,
+      "max_run_positive": 0
+    },
+    "3000_500|10000": {
+      "blocks": 300,
+      "positive_blocks": 0,
+      "fraction_positive": 0.0,
+      "max_run_positive": 0
+    }
+  },
+  "gas_qc": {
+    "gas_units_l2_by_size_orient": {
+      "500_3000|250": 219513,
+      "500_3000|1000": 219501,
+      "500_3000|2500": 219485,
+      "500_3000|5000": 219501,
+      "500_3000|10000": 256471,
+      "3000_500|250": 209205,
+      "3000_500|1000": 209173,
+      "3000_500|2500": 219566,
+      "3000_500|5000": 218621,
+      "3000_500|10000": 219625
+    },
+    "l1_included": true,
+    "l2_included": true,
+    "priority_excluded": true
+  },
+  "receipts": [
+    {
+      "name": "series",
+      "sha256": "b4dbf390cb91ea4d3386edf8d5c5171db7af7ff0a3472606c31a1b21fe43ea9c",
+      "raw_path": "data/raw/defi/d1/series_20260624T093254Z.json",
+      "blocks": 300,
+      "fail_blocks": 0
+    }
+  ],
+  "verdict_edge": "NO_ATOMIC_EDGE",
+  "verdict_capacity": "PAS_DE_CAPACITE",
+  "control_anomaly_audit_renforce": false,
+  "verdict": "NO_ATOMIC_EDGE",
+  "interpretation": "Contrôle attendu NO_ATOMIC_EDGE (round-trip 2 paliers = perte des frais). Un ATOMIC_MEV_SCOPE ici => AUDIT RENFORCÉ requis (artefact quote/identité/gas/timing ou edge réel fugace), JAMAIS un PnL tradable."
+}
