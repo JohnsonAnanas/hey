@@ -1,0 +1,123 @@
+{
+  "phase": "D1.5",
+  "track": "defi-samechain-mev-boundary",
+  "chain": "base",
+  "pair": "WETH/USDC",
+  "objective": "établir ou refuser une enveloppe atomique EXACTE Uniswap v3 ↔ SlipStream (contrôle)",
+  "read_only": true,
+  "no_key_no_wallet_no_tx_no_deploy": true,
+  "sources_basescan": {
+    "slip_factory": "0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A",
+    "slip_quoter": "0x254cF9E1E6e233aa1AC962CB9B05b2cfeAaE15b0",
+    "slip_router": "0xBE6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
+    "univ3_quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+    "univ3_router": "0x2626664c2603336E57B271c5C0b26F421741e481"
+  },
+  "params": {
+    "sizes_usd": [
+      250,
+      1000,
+      2500,
+      5000,
+      10000
+    ],
+    "univ3_fee": 500,
+    "slip_tickspacings_candidats": [
+      100,
+      1,
+      200,
+      2000,
+      50,
+      10
+    ]
+  },
+  "git_hash": "ec26823891f974aa0db022814bc934f39d39de74",
+  "runner_path": "d1_5_crossprotocol_envelope.py",
+  "runner_sha256": "846ac1dcbd2ecbe8f30484f209cd166681b859d14390cf9b280ba635e2d4129c",
+  "runner_tracked": true,
+  "runner_status": "clean",
+  "code_versioned": true,
+  "git_dirty": false,
+  "created_utc": "2026-06-24T09:55:21Z",
+  "head_block": 47752786,
+  "quoter_factory_verified": "0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A",
+  "slipstream_pool": {
+    "pool": "0xb2cc224c1c9feE385f8ad6a55b4d94E92359DC59",
+    "tick_spacing": 100,
+    "token0": "0x4200000000000000000000000000000000000006",
+    "token1": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "weth_price_usd": 1664.94
+  },
+  "slipstream_pool_candidates": [
+    {
+      "tick_spacing": 100,
+      "pool": "0xb2cc224c1c9feE385f8ad6a55b4d94E92359DC59",
+      "weth_price_usd": 1664.94
+    },
+    {
+      "tick_spacing": 1,
+      "pool": "0xdbc6998296caA1652A810dc8D3BaF4A8294330f1",
+      "weth_price_usd": 1656.21
+    },
+    {
+      "tick_spacing": 2000,
+      "pool": "0x0652202C4b2D09CB93aEDeFAdc14B36869483a98",
+      "weth_price_usd": 820.51
+    }
+  ],
+  "same_contracts_certified": {
+    "weth": "0x4200000000000000000000000000000000000006",
+    "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "univ3_uses": [
+      "0x4200000000000000000000000000000000000006",
+      "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+    ],
+    "slipstream_pool_tokens": [
+      "0x4200000000000000000000000000000000000006",
+      "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+    ],
+    "identical": true
+  },
+  "gross_roundtrip_usd_INDICATIF": {
+    "250": {
+      "uni_then_slip_usd": -0.1595,
+      "slip_then_uni_usd": -0.3066
+    },
+    "1000": {
+      "uni_then_slip_usd": -0.6578,
+      "slip_then_uni_usd": -1.2463
+    },
+    "2500": {
+      "uni_then_slip_usd": -1.7432,
+      "slip_then_uni_usd": -3.2143
+    },
+    "5000": {
+      "uni_then_slip_usd": -3.8154,
+      "slip_then_uni_usd": -6.7571
+    },
+    "10000": {
+      "uni_then_slip_usd": -8.9469,
+      "slip_then_uni_usd": -14.8281
+    }
+  },
+  "gross_note": "Round-trip BRUT (quotes seules, AUCUN gas) — INDICATIF que la mesure de quote cross-protocole est faisable. JAMAIS un net ni un PnL (l'enveloppe gas exacte n'est pas constructible, cf verdict).",
+  "envelope_atomic_exact": {
+    "constructible_read_only": false,
+    "routers": {
+      "univ3_swaprouter02": "0x2626664c2603336E57B271c5C0b26F421741e481 (route UNIQUEMENT des pools Uniswap v3)",
+      "slipstream_router": "0xBE6D8f0d05cC4be24d5167a3eF062215bE6D18a5 (route UNIQUEMENT des pools SlipStream)"
+    },
+    "reason": "Aucun routeur canonique ne chaîne un pool Uniswap v3 ET un pool SlipStream dans une seule transaction : SwapRouter02 résout ses pools via la factory Uniswap (path = fee tiers), le SlipStream Router via la factory SlipStream (tickSpacing). Un round-trip atomique cross-protocole exigerait un contrat EXÉCUTEUR déployé (INTERDIT : aucun déploiement). Donc le calldata atomique EXACT n'existe pas read-only -> estimateGas L2 et coût L1/data sur OCTETS EXACTS impossibles.",
+    "consequence": "Enveloppe atomique cross-protocole EXACTE NON ÉTABLIE -> NON_CONCLUANT (bloque le scanner)."
+  },
+  "verdict": "NON_CONCLUANT",
+  "verdict_detail": "Préconditions VÉRIFIÉES (infra SlipStream canonique on-chain ; mêmes contrats WETH/USDC ; quotes exactes cross-protocole faisables) MAIS enveloppe atomique EXACTE non constructible read-only (aucun routeur cross-protocole ; exécuteur = déploiement interdit). NON_CONCLUANT précis : BLOQUE tout scanner cible. Capture atomique cross-protocole = territoire MEV-exécuteur par construction, hors périmètre.",
+  "abstention_reason": "enveloppe atomique exacte cross-protocole non constructible (aucun routeur canonique ; déploiement interdit)",
+  "receipts": [
+    {
+      "name": "quotes",
+      "sha256": "9ab0f418ca43e4e0321de0c579c17121ad7a1c2ec57f8497014a4d67d1375af1",
+      "raw_path": "data/raw/defi/d1_5/quotes_20260624T095518Z.json"
+    }
+  ]
+}
