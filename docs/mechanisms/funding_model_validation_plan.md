@@ -65,6 +65,14 @@ segment, sans extrapolation** (cf §6).
 
 ## 2 bis. Gate de correspondance OHLC ↔ TWAP interne (préalable, documentaire — BLOQUANTE)
 
+> **STATUT (2026-06-24) : `GATE_2BIS_NON_FRANCHIE` (NON_PROUVÉE).** Levée documentaire effectuée
+> (`funding_gate2bis_recon.md`) : la correspondance OHLC `premiumIndexKlines` ↔ TWAP interne (5 s/5760)
+> **n'est pas démontrée par une source officielle — ni réfutée** (jamais `MODELE_REJETE`). Conséquence :
+> Phase 2A **plafonnée à `FIDELITE_MESUREE`**, `MODELE_VALIDE` **inatteignable avec les sources actuelles**.
+> **Aucune collecte `premiumIndexKlines` ne sera lancée pour une simple `FIDELITE_MESUREE`.** Réouverture :
+> ① source officielle prouvant la correspondance OHLC ↔ échantillonnage TWAP du funding ; **ou** ② accès aux
+> observations historiques **5 s** réellement utilisées par Binance.
+
 Avant tout budget théorique ou verdict de réussite/échec, **documenter** (sources officielles, datées) :
 
 1. **Granularité historique disponible** de `premiumIndexKlines` : intervalles offerts, **pas le plus
@@ -178,9 +186,12 @@ possible.
 
 ## 8. Enchaînement & gate
 
-1. (Documentaire) Lever les gates §8 du dossier 1.5 nécessaires (interest/cap par période, granularité P).
-2. (Autorisation séparée) Collecte bornée `premiumIndexKlines` — discipline Phase 1.
-3. (Autorisation séparée) Exécution 2A : reconstruction ex ante → comparaison → verdict de fidélité.
+1. (Documentaire) **Gate §2 bis levée le 2026-06-24 → `GATE_2BIS_NON_FRANCHIE`**
+   (`funding_gate2bis_recon.md`).
+2. **SUSPENDU** : collecte bornée `premiumIndexKlines` — **non lancée** tant que la gate §2 bis n'est pas
+   franchie (**pas de collecte pour une simple `FIDELITE_MESUREE`**).
+3. (Autorisation séparée, **conditionnée à la réouverture de la gate**) Exécution 2A : reconstruction
+   ex ante → comparaison → verdict de fidélité.
 4. **Gate :** `MODELE_VALIDE` est un **prérequis** à toute Phase économique (premier cycle).
    `FIDELITE_MESUREE`, `MODELE_REJETE` ou `NON_CONCLUANT` ⇒ la reconstructibilité n'est **pas** acquise ;
    **stop**.

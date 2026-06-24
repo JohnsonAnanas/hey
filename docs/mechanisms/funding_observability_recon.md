@@ -13,6 +13,13 @@
 > la primitive historique (`premiumIndexKlines`) existent — donc *non* `FORWARD_ONLY` — **mais leur
 > fidélité n'est pas encore démontrée**, donc *non* `RECONSTRUCTIBLE`. La démonstration de fidélité est
 > l'objet du **plan Phase 2A** (`funding_model_validation_plan.md`).
+>
+> **MAJ 2026-06-24 — gate §2 bis levée → `GATE_2BIS_NON_FRANCHIE` :** la correspondance OHLC
+> `premiumIndexKlines` ↔ TWAP interne (5 s/5760) **n'est pas démontrée par une source officielle** (ni
+> réfutée). ⇒ **reconstruction historique ex ante NON PROUVÉE** ; `MODELE_VALIDE` **inatteignable avec les
+> sources actuelles** ; **aucune collecte `premiumIndexKlines` pour une simple `FIDELITE_MESUREE`**. Détail :
+> `funding_gate2bis_recon.md`. Réouverture : source officielle prouvant la correspondance OHLC ↔
+> échantillonnage TWAP, **ou** accès aux observations historiques **5 s** réellement utilisées par Binance.
 
 ## 1. Pourquoi la distinction ex ante / ex post est décisive
 
