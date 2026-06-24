@@ -9,7 +9,10 @@
 > reconstruire un cycle réel ? Le rapport sépare STRICTEMENT le **taux réglé ex post** de
 > l'**information disponible ex ante**.
 >
-> **Verdict : `RECONSTRUCTIBLE`** (sous 2 conditions liantes, §5) — *non* `FORWARD_ONLY`.
+> **Verdict (corrigé 2026-06-24) : `RECONSTRUCTION_CANDIDATE` / `NON_CONCLUANT`** (§5). La formule **et**
+> la primitive historique (`premiumIndexKlines`) existent — donc *non* `FORWARD_ONLY` — **mais leur
+> fidélité n'est pas encore démontrée**, donc *non* `RECONSTRUCTIBLE`. La démonstration de fidélité est
+> l'objet du **plan Phase 2A** (`funding_model_validation_plan.md`).
 
 ## 1. Pourquoi la distinction ex ante / ex post est décisive
 
@@ -20,10 +23,15 @@ de look-ahead** : on injecterait une information du futur dans une décision pas
 backtest honnête dépend donc de la **reconstructibilité de l'information ex ante**, pas seulement de la
 disponibilité du taux réglé (déjà acquis en Phase 1).
 
-Deux issues possibles :
-- **`RECONSTRUCTIBLE`** : l'information ex ante des règlements passés est récupérable/reconstructible.
-- **`FORWARD_ONLY`** : elle n'est observable que vers l'avant (live), donc impossible à reconstituer pour
-  le passé ; il faudrait la collecter en temps réel à partir de maintenant.
+Issues possibles :
+- **`RECONSTRUCTIBLE`** : l'ex ante des règlements passés est reconstructible **et la fidélité est
+  démontrée**.
+- **`RECONSTRUCTION_CANDIDATE` / `NON_CONCLUANT`** : la primitive historique **et** la formule existent,
+  **mais la fidélité reste à prouver** (état actuel — voir Phase 2A).
+- **`FORWARD_ONLY`** : aucune primitive historique ; l'ex ante n'est observable que vers l'avant (live),
+  impossible à reconstituer pour le passé.
+
+**État retenu : `RECONSTRUCTION_CANDIDATE` / `NON_CONCLUANT`.**
 
 ## 2. Signaux d'un cycle réel et leur temporalité
 
@@ -39,12 +47,12 @@ Deux issues possibles :
 |---|---|---|---|
 | Funding **réglé** (ex post) | `GET /fapi/v1/fundingRate` (`startTime/endTime`, croissant) | ✅ **HISTORIQUE** | **Enregistré** — Phase 1 certifiée (1095 règlements) |
 | Funding **prédit/courant** (ex ante) | `GET /fapi/v1/premiumIndex` → `lastFundingRate`, `interestRate`, `nextFundingTime` | ❌ **LIVE seulement** (aucun `startTime/endTime`) | **NON enregistré** historiquement |
-| **Indice de prime** P (entrée cœur du funding) | `GET /fapi/v1/premiumIndexKlines` (`startTime/endTime`, max 1500) | ✅ **HISTORIQUE** | **Primitive de reconstruction** |
+| **Indice de prime** P (entrée cœur du funding) | `GET /fapi/v1/premiumIndexKlines` (`startTime/endTime`, max 1500) | ✅ **HISTORIQUE** | **Primitive de reconstruction** (fidélité à prouver) |
 | **Mark price** | `GET /fapi/v1/markPriceKlines` (`startTime/endTime`, max 1500) | ✅ **HISTORIQUE** | Primitive (valorisation perp) |
 | **Index price** | `GET /fapi/v1/indexPriceKlines` (famille klines) | ⚠️ **à confirmer** (page exacte non lue) | Primitive |
 | **Formule funding** (P → taux) | FAQ funding (formule, TWAP, interest, clamp) | ✅ documentée | Modèle de reconstruction |
-| Quotes **spot** (échangées) | `GET /api/v3/klines` (`startTime/endTime`, 1m, max 1000) | ✅ **HISTORIQUE** | OHLC = **prix échangés**, pas bid/ask |
-| Quotes **perp** (échangées) | `GET /fapi/v1/klines` (klines futures) | ✅ **HISTORIQUE** | OHLC = prix échangés |
+| Quotes **spot** (échangées) | `GET /api/v3/klines` (`startTime/endTime`, 1m, max 1000) | ✅ **HISTORIQUE** | OHLC = **prix échangés**, **jamais bid/ask exécutable** |
+| Quotes **perp** (échangées) | `GET /fapi/v1/klines` (klines futures) | ✅ **HISTORIQUE** | OHLC = prix échangés (proxy) |
 | Bulk historique | `data.binance.vision` : `aggTrades`, `klines`, `trades` (spot+futures) | ✅ documenté | Téléchargement de masse |
 | **bid/ask exécutable** (`bookTicker`) | `data.binance.vision` bulk | ⚠️ **NON documenté** dans le README lu → **à vérifier** | Manquant pour l'instant |
 
@@ -55,45 +63,45 @@ Deux issues possibles :
 - **Ex ante (NON enregistré directement).** Le taux **prédit/courant** affiché avant règlement
   (`premiumIndex.lastFundingRate`) est un **instantané live** : Binance **n'expose aucun historique** de
   cette valeur. Le récupérer pour un règlement passé est **impossible en lecture directe**.
-- **Mais reconstructible.** L'**indice de prime** P — entrée cœur du funding — est **historiquement
-  disponible** (`premiumIndexKlines`), et la **formule est documentée** :
+- **Candidat à reconstruction (fidélité non prouvée).** L'**indice de prime** P — entrée cœur du funding —
+  est **historiquement disponible** (`premiumIndexKlines`), et la **formule est documentée** :
   > « Funding Rate (F) = [Average Premium Index (P) + clamp(interest rate − Premium Index (P), 0.05%,
   > −0.05%)] / (8 / N) » ; interest rate **0,01 %/intervalle** par défaut ; P = TWAP sur l'intervalle
   > (5 s, 5760 points, poids croissants) ; clamp/cap ETHUSDT **±0,30 %** (Phase 0B).
   Le taux **prédit** affiché est lui-même « *an estimation of the last 8 hours of the premium index* »
-  (TWAP glissant 8 h) ; le taux **réglé** est le TWAP de l'**intervalle** de règlement. **Les deux se
-  reconstruisent** depuis la même série P historique, avec des fenêtres différentes.
+  (TWAP glissant 8 h) ; le taux **réglé** est le TWAP de l'**intervalle** de règlement. Les deux
+  **pourraient** se reconstruire depuis la même série P historique, avec des fenêtres différentes —
+  **sous réserve que la fidélité soit démontrée** (Phase 2A).
 
-## 5. Verdict : `RECONSTRUCTIBLE` (sous 2 conditions liantes)
+## 5. Verdict : `RECONSTRUCTION_CANDIDATE` / `NON_CONCLUANT`
 
-**Pourquoi `RECONSTRUCTIBLE` et non `FORWARD_ONLY`.** `FORWARD_ONLY` s'appliquerait si le seul accès au
-signal ex ante était l'instantané live (`premiumIndex`), sans primitive historique. Or la **primitive
-historique existe** (`premiumIndexKlines`, complétée par `markPriceKlines`) et la **formule est
-documentée** : l'information ex ante des règlements passés est donc **reconstructible**, et des **quotes
-spot/perp historiques synchronisables** (klines) existent aux horodatages de règlement.
+**Ni `FORWARD_ONLY`, ni (encore) `RECONSTRUCTIBLE`.** `FORWARD_ONLY` s'appliquerait si le seul accès au
+signal ex ante était l'instantané live (`premiumIndex`), sans primitive historique — **ce n'est pas le
+cas** : la **primitive historique existe** (`premiumIndexKlines`, complétée par `markPriceKlines`) et la
+**formule est documentée**. Mais `RECONSTRUCTIBLE` exigerait que la **fidélité** de la reconstruction soit
+**démontrée** — elle ne l'est pas. La formule et la primitive sont des **conditions nécessaires, non
+suffisantes** ; la concordance reconstruit↔réglé reste à prouver. → **`RECONSTRUCTION_CANDIDATE`
+(NON_CONCLUANT)**, en attente de la validation **Phase 2A**.
 
-**Conditions liantes à lever AVANT tout usage économique** (elles ne changent pas le verdict mais
-verrouillent la suite) :
+**Pourquoi la fidélité n'est pas démontrée — 2 raisons de fond (objet de la Phase 2A) :**
 
-1. **Validation de la reconstruction (risque de modèle).** Le taux reconstruit (TWAP de
-   `premiumIndexKlines` — au pas kline, p.ex. 1 m — **approxime** le vrai TWAP à 5 s / 5760 points,
-   plus `interest rate` et `clamp`) doit être **validé contre le `fundingRate` réglé déjà certifié
-   (Phase 1)** : sur la fenêtre d'intervalle, reconstruit ≈ réglé dans une **tolérance déclarée**. Si
-   l'écart est trop grand, la reconstruction est non fiable → **dégrader vers `FORWARD_ONLY`**.
-2. **Quotes exécutables.** Les sources confirmées donnent des **prix échangés** (klines OHLC) et l'indice
-   de prime (qui embarque l'impact bid/ask **côté funding**), mais **aucun bid/ask exécutable vérifié**
-   pour les **jambes** spot/perp (`bookTicker` bulk = **à vérifier**). Un cycle réel aux **prix
-   exécutables** (entrée/sortie) exige le bid/ask → tant qu'il n'est pas confirmé, l'entrée/sortie ne peut
-   être chiffrée qu'avec des prix **échangés** (proxy), pas exécutables.
+1. **Risque de modèle (non quantifié).** Le taux reconstruit (TWAP de `premiumIndexKlines` — au pas kline,
+   p.ex. 1 m — qui **approxime** le vrai TWAP à 5 s / 5760 points, plus `interest rate` et `clamp`)
+   **n'a pas été comparé** au `fundingRate` réglé certifié (Phase 1). Tant que l'écart reconstruit↔réglé
+   n'est pas mesuré et borné par une tolérance préenregistrée, la fidélité est **inconnue**.
+2. **Quotes exécutables absentes.** Les sources confirmées donnent des **prix échangés** (klines OHLC) et
+   l'indice de prime (qui embarque l'impact bid/ask **côté funding**), mais **aucun bid/ask exécutable
+   vérifié** pour les **jambes** spot/perp (`bookTicker` bulk = **à vérifier**). **Les klines restent des
+   proxys de prix, jamais des quotes exécutables.**
 
 ## 6. Recette de reconstruction (cartographie documentaire — AUCUN code, AUCUNE collecte)
 
 Pour mémoire, sans l'exécuter : le funding ex ante d'un règlement passé se reconstruirait depuis
 `premiumIndexKlines` (série P) en appliquant la formule documentée (TWAP fenêtre d'intervalle pour le
-réglé ; TWAP glissant 8 h pour l'affiché), avec `interest rate` constant documenté et le `clamp` ±0,05 %,
-puis **validation** contre `fundingRate` (Phase 1). La base se reconstruirait depuis perp `klines` − spot
-`klines` aux horodatages de règlement. **Rien de ceci n'est autorisé tant que la Phase économique n'est
-pas validée.**
+réglé ; TWAP glissant 8 h pour l'affiché), avec `interest rate` documenté et le `clamp` ±0,05 %, **puis
+validation** contre `fundingRate` (Phase 1). La base se reconstruirait depuis perp `klines` − spot
+`klines` (proxys de prix) aux horodatages de règlement. **Rien de ceci n'est autorisé ni démontré** tant
+que la Phase 2A n'a pas établi la fidélité.
 
 ## 7. Sources (accès 2026-06-24 UTC, docs officielles uniquement)
 
@@ -112,8 +120,10 @@ pas validée.**
 - **Interest rate ETHUSDT sur la fenêtre** : confirmer le régime par défaut (0,01 %/intervalle) et l'absence
   d'épisode spécial ; idem cap/floor dynamiques (Phase 0B : ±0,30 %).
 - **Fidélité TWAP** : granularité kline (1 m) vs TWAP réel 5 s — borne d'erreur à établir lors de la
-  validation §5.1.
+  validation (Phase 2A).
 
 > **Phase économique INTERDITE sans nouvelle validation humaine.** Ce dossier ne produit aucune
-> statistique, annualisation, calibration, règle d'entrée ni PnL : il établit seulement que l'information
-> ex ante est **reconstructible** (sous validation), distincte du taux réglé ex post.
+> statistique, annualisation, calibration, règle d'entrée ni PnL : il établit seulement que l'ex ante est
+> un **`RECONSTRUCTION_CANDIDATE` (NON_CONCLUANT)** — primitive + formule présentes, **fidélité non
+> démontrée** —, distinct du taux réglé ex post. La démonstration de fidélité est l'objet du **plan
+> Phase 2A** (`funding_model_validation_plan.md`), à exécuter seulement sur autorisation.
