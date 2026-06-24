@@ -51,17 +51,18 @@ CHAIN_ID = 8453
 WETH = Web3.to_checksum_address("0x4200000000000000000000000000000000000006")
 USDC = Web3.to_checksum_address("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913")
 UNIV3_ROUTER = Web3.to_checksum_address("0x2626664c2603336E57B271c5C0b26F421741e481")  # SwapRouter02 (Uni v3)
-SLIP_FACTORY = Web3.to_checksum_address("0xeC8E5342B19977B4eF8892e02D8DAEcfa1315831")
+SLIP_FACTORY = Web3.to_checksum_address("0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A")  # = SlipStream Quoter.factory() (autorité ; vérifié au run)
 SLIP_QUOTER = Web3.to_checksum_address("0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0")
 SLIP_ROUTER = Web3.to_checksum_address("0xbe6d8f0d05cc4be24d5167a3ef062215be6d18a5")
 
 UNIV3_FEE = 500                                   # palier Uni v3 (le plus liquide WETH/USDC)
-SLIP_TICKSPACINGS = [100, 200, 50, 2000, 1, 500]  # candidats SlipStream (découverte du pool WETH/USDC)
+SLIP_TICKSPACINGS = [100, 1, 200, 2000, 50, 10]   # candidats ; on retient le pool same-token le PLUS PROFOND
 SIZES_USD = [250, 1000, 2500, 5000, 10000]
 
 SEL_SLIP_QUOTE = Web3.keccak(text="quoteExactInputSingle((address,address,uint256,int24,uint160))")[:4]
 SEL_GETPOOL_TS = Web3.keccak(text="getPool(address,address,int24)")[:4]
 SEL_DECIMALS = Web3.keccak(text="decimals()")[:4]
+SEL_FACTORY = Web3.keccak(text="factory()")[:4]
 
 
 # ----------------------------------------------------------------------------- fonctions PURES (testables)
@@ -200,8 +201,17 @@ def main() -> int:
         return abstain(run_dir, manifest, "Uni v3 : 1 WETH→USDC ne quote pas (palier 500)")
     weth_price = u_price[0] / 1e6
 
-    # --- Découverte + vérification du pool SlipStream WETH/USDC (par tickSpacing) ---
-    slip_pool, slip_ts = None, None
+    # --- Intégrité : le quoter doit pointer vers SLIP_FACTORY (paire appariée, autorité sur le label) ---
+    try:
+        qf = addr_from_word(bytes(w3.eth.call({"to": SLIP_QUOTER, "data": "0x" + SEL_FACTORY.hex()}, head)))
+    except Exception as e:
+        return abstain(run_dir, manifest, f"quoter.factory() illisible ({type(e).__name__})")
+    if qf != SLIP_FACTORY:
+        return abstain(run_dir, manifest, f"quoter.factory()={qf} != SLIP_FACTORY attendu -> non fiable")
+    manifest["quoter_factory_verified"] = qf
+
+    # --- Découverte du pool SlipStream WETH/USDC : on retient le plus PROFOND (same-token, quotable) ---
+    slip_pool, slip_ts, best_out, candidates = None, None, -1, []
     for ts in SLIP_TICKSPACINGS:
         try:
             ret = w3.eth.call({"to": SLIP_FACTORY, "data": "0x" + getpool_calldata(WETH, USDC, ts).hex()}, head)
@@ -215,13 +225,17 @@ def main() -> int:
             t1 = addr_from_word(bytes(w3.eth.call({"to": pool, "data": "0x" + SEL_TOKEN1.hex()}, head)))
         except Exception:
             continue
-        if t0 and t1 and same_tokens(t0, t1, WETH, USDC):
-            q = slip_quote(w3, WETH, USDC, 10 ** 18, ts, head)
-            if q is not None and 100.0 < q / 1e6 < 100_000.0:
-                slip_pool, slip_ts = pool, ts
-                manifest["slipstream_pool"] = {"pool": pool, "tick_spacing": ts, "token0": t0, "token1": t1,
-                                               "weth_price_usd": round(q / 1e6, 2)}
-                break
+        if not (t0 and t1 and same_tokens(t0, t1, WETH, USDC)):
+            continue
+        q = slip_quote(w3, WETH, USDC, 10 ** 18, ts, head)
+        if q is None or not (100.0 < q / 1e6 < 100_000.0):
+            continue
+        candidates.append({"tick_spacing": ts, "pool": pool, "weth_price_usd": round(q / 1e6, 2)})
+        if q > best_out:                       # on retient le pool le plus profond (slippage minimal a 1 WETH)
+            best_out, slip_pool, slip_ts = q, pool, ts
+            manifest["slipstream_pool"] = {"pool": pool, "tick_spacing": ts, "token0": t0, "token1": t1,
+                                           "weth_price_usd": round(q / 1e6, 2)}
+    manifest["slipstream_pool_candidates"] = candidates
     if slip_pool is None:
         return abstain(run_dir, manifest,
                        "pool SlipStream WETH/USDC introuvable/non quotable (factory/quoter/tickSpacing non fiables)")
