@@ -1,0 +1,59 @@
+{
+  "phase": "D2B-1",
+  "track": "defi-samechain-mev-boundary",
+  "chain": "base",
+  "objective": "liveness $250 des routes gelees (cohorte USDC), 2 sens, admission = non-revert seulement",
+  "read_only": true,
+  "no_contract_key_wallet_tx_capital": true,
+  "d2b0_source": {
+    "manifest": "runs/20260624T133957Z_d2b0-cohort-routes-usdc/manifest.json",
+    "frozen_order_digest": "549e9c198bd6393bd26c6d8b1e207501c244d1af109d3ebdcc80700450165f59",
+    "routes_count": 540
+  },
+  "params": {
+    "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "usdc_amount_6dec": 250000000,
+    "from_distinct_de_executeur": "0x0000000000000000000000000000000000000001",
+    "executeur": "0x00000000000000000000000000000000DeaDBeef",
+    "orientations": [
+      "uni_then_slip",
+      "slip_then_uni"
+    ]
+  },
+  "created_utc": "2026-06-24T15:18:07Z",
+  "git_hash": "414b559caa8e6b88d85503e874533351a4a4537f",
+  "runner_path": "d2b1_liveness.py",
+  "runner_sha256": "78d97ee6ec56617c527bad6f1f09b2fb7024004b8a351bdd75e261db1b4ab815",
+  "runner_tracked": true,
+  "runner_status": "clean",
+  "code_versioned": true,
+  "git_dirty": false,
+  "note": "Liveness seule. Aucun upper bound, aucune grille $1k-$10k, aucun 300 blocs, aucun verdict economique.",
+  "block": 47762470,
+  "usdc_balance_slot_on_executor": 9,
+  "routes_total": 540,
+  "routes_vivantes": 145,
+  "routes_mortes": 395,
+  "routes_non_concluantes": 0,
+  "reverts_par_motif": {
+    "execution reverted": 697,
+    "execution reverted: SPL": 60
+  },
+  "couverture": {
+    "routes_attendues": 540,
+    "routes_traitees": 540,
+    "ordre_gele_respecte": true,
+    "ordre_digest_utilise": "549e9c198bd6393bd26c6d8b1e207501c244d1af109d3ebdcc80700450165f59",
+    "complete": true
+  },
+  "receipts": [
+    {
+      "name": "liveness",
+      "sha256": "24f54f985fe75ba1781dde91ebf608c4b5912b1d0ca71ef6cc280142ab5b1cab",
+      "raw_path": "data/raw/defi/d2b1/liveness_20260624T151807Z.json",
+      "n_routes": 540
+    }
+  ],
+  "verdict": "LIVENESS_OK",
+  "verdict_detail": "Liveness complete sur l'ordre gele. Admission = non-revert des 2 sens uniquement ; aucun filtre/tri/arret par signe de sortie. D2B-2 = decision separee."
+}
