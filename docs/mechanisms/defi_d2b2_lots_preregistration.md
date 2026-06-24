@@ -31,6 +31,11 @@ exécutés ; aucun arrêt après un résultat ± ; l'ordre gelé ne change jamai
 - Exécuteur : `CrossProtocolExecutor` D1.6 (bytecode versionné, source sha `53417e97…`, solc
   `0.8.26+commit.8a97fa7a`, evm `cancun`, optimizer runs=200). Mesure : sortie atomique exacte (`eth_call`),
   gas L2 (`estimateGas`) + L1 (`getL1Fee`) sur octets exacts ; **priorité MEV exclue → borne supérieure**.
+- **Ancre ETH/USD (conversion du gas)** : feed **Chainlink ETH/USD canonique Base**
+  `0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70`, `decimals=8`, fonction `latestRoundData()`, **lue au bloc
+  b** ; garde-fous `answer>0`, `updatedAt ≤ timestamp(b)`, **staleness ≤ 3600 s** (préenregistré ; max
+  observé sur la fenêtre = 618 s) ; **indépendante des pools cibles** (oracle, pas un pool). Absence /
+  staleness / erreur du feed → `NON_CONCLUANT`, **jamais gas=0**.
 
 ## 4. Règles de mesure (par route, dans chaque lot)
 - Pour chaque (taille, direction, bloc) : `upper_bound_atomique = sortie − entrée − gas_normal` (USD).

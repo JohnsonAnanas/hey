@@ -8,17 +8,20 @@ REGLE 1 (fenetre, blockTag stable) : B_end = B1 = 47762470 ; B_start = B1-299 ; 
 CHAQUE cycle (route, bloc b, taille, direction), eth_call (sortie) + eth_estimateGas (gas L2) + getL1Fee
 (L1/data) utilisent TOUS le MEME blockTag=b. JAMAIS 'latest', JAMAIS un gas calibre a la tete.
 
-REGLE 2 (formule, ancre ETH/USD independante lue au bloc b) :
+REGLE 2 (formule, ancre ETH/USD ON-CHAIN INDEPENDANTE des pools cibles) :
   upper_bound_USDC = (USDC_final - USDC_input)/1e6 - gas_normal_USDC
   gas_normal_wei = gas_units_L2(b) * base_fee_L2(b) + l1Fee(b) ; priorite MEV EXCLUE -> borne superieure.
-  gas_normal_USDC = gas_normal_wei/1e18 * eth_usd(b). ANCRE = Uniswap v3 QuoterV2 (0x3d4e44...), WETH/USDC
-  fee=500, TAILLE = 1 WETH (1e18 wei) -> out_USDC(6dec)/1e6 = USD/WETH, lue au MEME bloc b. INDEPENDANTE de
-  la route (paire WETH/USDC, usage = conversion gas seulement). Si l'ancre manque a un bloc -> NON_CONCLUANT
-  pour ce point, JAMAIS gas=0.
+  gas_normal_USDC = gas_normal_wei/1e18 * eth_usd(b). ANCRE = feed Chainlink ETH/USD canonique Base
+  0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70, decimals=8, fonction latestRoundData(), lue au MEME bloc b.
+  Garde-fous : answer > 0 ; updatedAt <= timestamp(b) ; staleness = ts(b)-updatedAt <= STALENESS_MAX (3600 s,
+  prefixe avant donnees). INDEPENDANTE des pools mesures (oracle, pas un pool). Absence/staleness/erreur du
+  feed -> NON_CONCLUANT pour ce point, JAMAIS gas=0.
 
 REGLE 3 (disponibilite historique, categories SEPAREES) :
   - pool/code ABSENT au bloc b -> WINDOW_UNAVAILABLE (pas un revert de capacite) ;
-  - revert d'EXECUTION sur une route reellement presente (pools avec code) -> resultat de CAPACITE ;
+  - revert d'EXECUTION sur une route reellement presente (pools avec code) -> resultat de CAPACITE
+    (limite de capacite OPERATIONNELLE ; les 145 routes ont deja passe les deux sens a $250 ; on conserve
+    le reason BRUT, sans pretendre que chaque revert est uniquement un probleme de liquidite) ;
   - erreur RPC/override/quoteur/cout -> NON_CONCLUANT ;
   - ces categories sont separees dans les sorties.
 
@@ -26,7 +29,7 @@ REGLE 4 : les 29 lots restent obligatoires, dans l'ordre gele, sans modification
 et indisponibilites RESTENT dans les raw et manifests.
 
 Lecture seule ; aucun contrat/cle/wallet/approbation/tx/capital (override de code = simulation). Gate :
---lot N requis (pas de run de serie accidentel).
+--lot N requise (pas de run de serie accidentel).
 """
 from __future__ import annotations
 
@@ -44,24 +47,43 @@ from web3 import Web3
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from archive_rpc import endpoints  # noqa: E402
-from sim.quote_v3 import V3Quoter  # noqa: E402
 from d1_mev_boundary_control import (  # noqa: E402
-    raw_rpc, serialize_dummy_1559, gas_normal_wei, mapping_slot, SEL_GETL1FEE, GASORACLE, CHAIN_ID, WETH)
+    raw_rpc, serialize_dummy_1559, gas_normal_wei, mapping_slot, SEL_GETL1FEE, GASORACLE, CHAIN_ID)
 from d2b1_liveness import exec_calldata, classify, USDC, FAKE, FROM, HUGE, ORIENTATIONS  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 B1 = 47762470
 N_BLOCKS = 300
 SIZES_USD = [250, 1000, 2500, 5000, 10000]
-ANCHOR_SIZE_WETH = 10 ** 18      # 1 WETH (ancre ETH/USD)
-ANCHOR_FEE = 500                 # Uniswap v3 WETH/USDC, palier le plus liquide
 USDC_SLOT = 9                    # FiatToken (auto-verifie au run)
+# Ancre ETH/USD : feed Chainlink canonique Base, INDEPENDANT des pools cibles (oracle, pas un pool).
+CHAINLINK_ETH_USD = Web3.to_checksum_address("0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70")
+CHAINLINK_DECIMALS = 8
+STALENESS_MAX_S = 3600           # seuil de staleness PREENREGISTRE (avant donnees) ; max observe fenetre = 618 s
+SEL_LATESTROUNDDATA = Web3.keccak(text="latestRoundData()")[:4]
 
 
 # ----------------------------------------------------------------------------- fonctions PURES (testables)
 def window_blocks(b1: int, n: int = N_BLOCKS):
     """Fenetre INCLUSIVE [b1-(n-1), b1] -> (b_start, b_end, n_blocs)."""
     return b1 - (n - 1), b1, n
+
+
+def anchor_eth_usd(answer: int | None, updated_at: int | None, block_ts: int | None,
+                   decimals: int = CHAINLINK_DECIMALS, staleness_max: int = STALENESS_MAX_S):
+    """ETH/USD depuis Chainlink avec garde-fous. None si invalide -> declenche NON_CONCLUANT (jamais gas=0).
+
+    Exige : answer > 0 ; updatedAt <= ts(b) (pas dans le futur) ; ts(b)-updatedAt <= staleness_max.
+    """
+    if answer is None or block_ts is None or updated_at is None:
+        return None
+    if answer <= 0:
+        return None
+    if updated_at > block_ts:
+        return None
+    if block_ts - updated_at > staleness_max:
+        return None
+    return answer / (10 ** decimals)
 
 
 def gas_normal_usdc(gas_wei: int, eth_usd: float) -> float:
@@ -80,7 +102,7 @@ def classify_cycle(pool_present: bool, exec_status: str, anchor_ok: bool, gas_ok
     if exec_status == "rpcerror":
         return "NON_CONCLUANT"
     if exec_status == "revert":
-        return "CAPACITY"                       # route presente, revert d'execution = capacite
+        return "CAPACITY"                       # route presente, revert d'execution = capacite operationnelle
     if not (anchor_ok and gas_ok):
         return "NON_CONCLUANT"                  # ancre/gas manquant -> NON_CONCLUANT, jamais gas=0
     return "ok"
@@ -114,12 +136,12 @@ def provenance() -> dict:
 def load_lot(lot_index: int):
     cands = sorted(glob.glob(os.path.join(HERE, "runs", "*_d2b2-lots-frozen", "manifest.json")))
     if not cands:
-        return None, None
+        return None, None, None
     plan = json.load(open(cands[-1], encoding="utf-8"))
     lots = plan["lots"]
     if not (0 <= lot_index < len(lots)):
-        return plan, None
-    return plan, lots[lot_index]
+        return plan, None, cands[-1]
+    return plan, lots[lot_index], cands[-1]
 
 
 def main() -> int:
@@ -133,7 +155,7 @@ def main() -> int:
     run_dir = os.path.join(HERE, "runs", f"{stamp}_d2b2-measure-lot{args.lot:02d}")
     os.makedirs(raw_dir, exist_ok=True)
     os.makedirs(run_dir, exist_ok=True)
-    plan, lot = load_lot(args.lot)
+    plan, lot, plan_path = load_lot(args.lot)
     b_start, b_end, nb = window_blocks(B1)
     manifest = {
         "phase": "D2B-2-measure", "lot_index": args.lot, "track": "defi-samechain-mev-boundary", "chain": "base",
@@ -141,44 +163,40 @@ def main() -> int:
         "window": {"B1": B1, "b_start": b_start, "b_end": b_end, "n_blocks": nb, "inclusive": True,
                    "blockTag": "b par cycle (eth_call/estimateGas/getL1Fee) ; jamais latest/tete"},
         "formula": "upper_bound_USDC = (USDC_final-USDC_input)/1e6 - gas_normal_wei/1e18*eth_usd(b) ; priorite MEV EXCLUE",
-        "eth_usd_anchor": {"source": "Uniswap v3 QuoterV2 0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-                           "pair": "WETH/USDC", "fee": ANCHOR_FEE, "size_weth_wei": ANCHOR_SIZE_WETH,
-                           "read_at": "meme bloc b ; manquant -> NON_CONCLUANT, jamais gas=0", "independent": True},
+        "eth_usd_anchor": {"type": "Chainlink feed (oracle, INDEPENDANT des pools cibles)",
+                           "feed": CHAINLINK_ETH_USD, "decimals": CHAINLINK_DECIMALS,
+                           "function": "latestRoundData()", "read_at": "meme bloc b",
+                           "guards": ["answer>0", "updatedAt<=ts(b)", f"ts(b)-updatedAt<={STALENESS_MAX_S}s"],
+                           "staleness_max_s": STALENESS_MAX_S,
+                           "on_invalid": "NON_CONCLUANT (jamais gas=0)"},
         "categories": ["ok", "CAPACITY", "WINDOW_UNAVAILABLE", "NON_CONCLUANT"],
         "params": {"sizes_usd": SIZES_USD, "directions": ORIENTATIONS, "usdc": USDC, "usdc_slot": USDC_SLOT},
-        "lots_source": (os.path.relpath(sorted(glob.glob(os.path.join(HERE, "runs", "*_d2b2-lots-frozen",
-                        "manifest.json")))[-1], HERE).replace("\\", "/") if plan else None),
+        "lots_source": (os.path.relpath(plan_path, HERE).replace("\\", "/") if plan_path else None),
         "plan_digest": (plan or {}).get("plan_digest_sha256"),
         "created_utc": now_utc(), **prov,
     }
     if plan is None or lot is None:
-        manifest["verdict"] = "NON_CONCLUANT"
-        manifest["abstention_reason"] = "plan de lots gele introuvable ou index hors borne"
-        with open(os.path.join(run_dir, "manifest.json"), "w", encoding="utf-8") as f:
-            json.dump(manifest, f, ensure_ascii=False, indent=2)
-        print(json.dumps({"verdict": "NON_CONCLUANT", "reason": manifest["abstention_reason"]}))
-        return 0
+        return _abort(run_dir, manifest, "plan de lots gele introuvable ou index hors borne")
 
     url = endpoints("base")[0]
     bytecode = json.load(open(os.path.join(HERE, "contracts", "CrossProtocolExecutor.json"),
                               encoding="utf-8"))["deployed_bytecode"]
-    uq = V3Quoter(w3=_Web3(url), family="univ3")
     OV = {FAKE: {"code": bytecode, "balance": hex(10 ** 24)},
           USDC: {"stateDiff": {mapping_slot(FAKE, USDC_SLOT): "0x" + HUGE.to_bytes(32, "big").hex()}}}
-
-    # garde-fous (slot USDC sur l'executeur + code-override) au bloc B1
     if not _slot_ok(url, OV) or not _code_override_ok(url):
         return _abort(run_dir, manifest, "garde-fou KO (slot USDC ou code-override) -> NON_CONCLUANT")
 
     cycles, cat = [], {"ok": 0, "CAPACITY": 0, "WINDOW_UNAVAILABLE": 0, "NON_CONCLUANT": 0}
-    code_cache, anchor_cache, bf_cache = {}, {}, {}
+    code_cache, block_cache = {}, {}     # block_cache[b] = (base_fee, eth_usd)
     for r in lot["routes"]:
         other = r["token1"] if Web3.to_checksum_address(r["token0"]) == USDC else r["token0"]
         for b in range(b_start, b_end + 1):
             bhex = hex(b)
-            present = _pool_present(url, r["uni_pool"], b, code_cache) and _pool_present(url, r["slip_pool"], b, code_cache)
-            eth_usd = anchor_cache.get(b) if b in anchor_cache else anchor_cache.setdefault(b, _anchor(uq, b))
-            bf = bf_cache.get(b) if b in bf_cache else bf_cache.setdefault(b, _base_fee(url, bhex))
+            present = (_pool_present(url, r["uni_pool"], b, code_cache)
+                       and _pool_present(url, r["slip_pool"], b, code_cache))
+            if b not in block_cache:
+                block_cache[b] = _block_bf_anchor(url, bhex)
+            bf, eth_usd = block_cache[b]
             for s in SIZES_USD:
                 for d in ORIENTATIONS:
                     rec = {"route_hash": r["route_hash"], "block": b, "size_usd": s, "direction": d}
@@ -186,21 +204,22 @@ def main() -> int:
                         rec["category"] = "WINDOW_UNAVAILABLE"
                         cat["WINDOW_UNAVAILABLE"] += 1; cycles.append(rec); continue
                     cd = exec_calldata(d, USDC, other, r["uni_fee"], r["slip_tickSpacing"], s * 10 ** 6)
-                    out_res, out_err = raw_rpc(url, "eth_call", [{"from": FROM, "to": FAKE, "data": "0x" + cd.hex()}, bhex, OV])
-                    est = classify(out_err) if out_err else "ok"
-                    if est == "ok" and out_res is None:
-                        est = "rpcerror"
-                    gas_ok = anchor_ok = False
+                    out_res, out_err = raw_rpc(url, "eth_call",
+                                               [{"from": FROM, "to": FAKE, "data": "0x" + cd.hex()}, bhex, OV])
+                    est = classify(out_err) if out_err else ("ok" if out_res is not None else "rpcerror")
+                    gas_ok = False
+                    anchor_ok = eth_usd is not None and eth_usd > 0
                     gu = l1 = None
                     if est == "ok":
-                        gres, gerr = raw_rpc(url, "eth_estimateGas", [{"from": FROM, "to": FAKE, "value": "0x0", "data": "0x" + cd.hex()}, bhex, OV])
+                        gres, gerr = raw_rpc(url, "eth_estimateGas",
+                                             [{"from": FROM, "to": FAKE, "value": "0x0", "data": "0x" + cd.hex()}, bhex, OV])
                         if gres and not gerr and bf and bf > 0:
                             gu = int(gres, 16)
                             ser = serialize_dummy_1559(CHAIN_ID, gu, FAKE, cd, max(bf, 1) * 2, 10 ** 6)
-                            lres, lerr = raw_rpc(url, "eth_call", [{"to": GASORACLE, "data": "0x" + (SEL_GETL1FEE + abi_encode(["bytes"], [ser])).hex()}, bhex])
+                            lres, lerr = raw_rpc(url, "eth_call",
+                                                 [{"to": GASORACLE, "data": "0x" + (SEL_GETL1FEE + abi_encode(["bytes"], [ser])).hex()}, bhex])
                             if lres and not lerr:
                                 l1 = int(lres, 16); gas_ok = True
-                        anchor_ok = eth_usd is not None and eth_usd > 0
                     rec["category"] = classify_cycle(present, est, anchor_ok, gas_ok)
                     if rec["category"] == "ok":
                         gnw = gas_normal_wei(gu, bf, l1)
@@ -209,10 +228,10 @@ def main() -> int:
                                     "l1_fee_wei": l1, "eth_usd": round(eth_usd, 4),
                                     "upper_bound_usd": round(upper_bound_usdc(int(out_res, 16), s * 10 ** 6, gnu), 6)})
                     elif rec["category"] == "CAPACITY":
-                        rec["reason"] = (out_err.get("message", "") if isinstance(out_err, dict) else str(out_err))[:140]
+                        rec["reason_raw"] = (out_err.get("message", "") if isinstance(out_err, dict) else str(out_err))[:140]
                     elif rec["category"] == "NON_CONCLUANT":
-                        rec["reason"] = ("ancre/gas manquant" if est == "ok" else
-                                         (out_err.get("message", "") if isinstance(out_err, dict) else str(out_err))[:140])
+                        rec["reason_raw"] = ("ancre/gas manquant" if est == "ok"
+                                             else (out_err.get("message", "") if isinstance(out_err, dict) else str(out_err))[:140])
                     cat[rec["category"]] += 1
                     cycles.append(rec)
 
@@ -227,9 +246,10 @@ def main() -> int:
         "receipts": [{"name": f"lot{args.lot:02d}", "sha256": hashlib.sha256(raw).hexdigest(),
                       "raw_path": os.path.relpath(raw_path, HERE).replace("\\", "/")}],
         "verdict": "LOT_MESURE" if cat["NON_CONCLUANT"] == 0 else "LOT_MESURE_AVEC_NON_CONCLUANTS",
-        "note": ("Bornes superieures hors priorite MEV ; AUCUN verdict economique. Reverts (CAPACITY) et "
-                 "indisponibilites (WINDOW_UNAVAILABLE) CONSERVES dans raw+manifest. Lot du plan gele, ordre "
-                 "inchange. Les 29 lots restent obligatoires."),
+        "note": ("Bornes superieures hors priorite MEV ; AUCUN verdict economique. CAPACITY = limite "
+                 "OPERATIONNELLE (reason brut conserve, pas reduit a la liquidite) ; WINDOW_UNAVAILABLE = "
+                 "pool absent au bloc. Reverts + indisponibilites CONSERVES dans raw+manifest. Lot du plan "
+                 "gele, ordre inchange. Les 29 lots restent obligatoires."),
     })
     with open(os.path.join(run_dir, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
@@ -239,15 +259,10 @@ def main() -> int:
     return 0
 
 
-# --- helpers reseau (isoles pour lisibilite ; non purs) ---
-def _Web3(url):
-    return Web3(Web3.HTTPProvider(url, request_kwargs={"timeout": 40}))
-
-
+# --- helpers reseau (isoles ; non purs) ---
 def _slot_ok(url, ov):
-    from eth_abi import encode as enc
     sel = Web3.keccak(text="balanceOf(address)")[:4]
-    r, e = raw_rpc(url, "eth_call", [{"to": USDC, "data": "0x" + (sel + enc(["address"], [FAKE])).hex()}, hex(B1), ov])
+    r, e = raw_rpc(url, "eth_call", [{"to": USDC, "data": "0x" + (sel + abi_encode(["address"], [FAKE])).hex()}, hex(B1), ov])
     return bool(r) and not e and int(r, 16) == HUGE
 
 
@@ -265,17 +280,21 @@ def _pool_present(url, pool, b, cache):
     return cache[key]
 
 
-def _anchor(uq, b):
-    q = uq.quote(WETH, USDC, ANCHOR_SIZE_WETH, ANCHOR_FEE, b)
-    return (q[0] / 1e6) if q else None
-
-
-def _base_fee(url, bhex):
-    blk, e = raw_rpc(url, "eth_getBlockByNumber", [bhex, False])
+def _block_bf_anchor(url, bhex):
+    """(base_fee, eth_usd) au bloc bhex : base_fee + timestamp via get_block ; eth_usd via Chainlink + garde-fous."""
+    blk, _ = raw_rpc(url, "eth_getBlockByNumber", [bhex, False])
     try:
-        return int(blk["baseFeePerGas"], 16) if blk and blk.get("baseFeePerGas") else None
+        bf = int(blk["baseFeePerGas"], 16) if blk and blk.get("baseFeePerGas") else None
+        ts = int(blk["timestamp"], 16) if blk and blk.get("timestamp") else None
     except Exception:
-        return None
+        bf = ts = None
+    answer = updated_at = None
+    r, e = raw_rpc(url, "eth_call", [{"to": CHAINLINK_ETH_USD, "data": "0x" + SEL_LATESTROUNDDATA.hex()}, bhex])
+    if r and not e and len(r) >= 2 + 64 * 5:
+        b = bytes.fromhex(r[2:])
+        answer = int.from_bytes(b[32:64], "big", signed=True)     # int256 answer
+        updated_at = int.from_bytes(b[96:128], "big")             # uint updatedAt
+    return bf, anchor_eth_usd(answer, updated_at, ts)
 
 
 def _abort(run_dir, manifest, reason):
