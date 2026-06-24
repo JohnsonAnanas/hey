@@ -1,0 +1,101 @@
+{
+  "phase": "PHASE1",
+  "source_donnees": "Binance-USDM",
+  "symbol": "ETHUSDT",
+  "window": {
+    "start_utc": "2025-06-23T00:00:00Z",
+    "end_utc": "2026-06-23T00:00:00Z"
+  },
+  "created_utc": "2026-06-24T01:25:04Z",
+  "git_hash": "3582c0b21ec386a8fa92cc512aa8f08f74b4103d",
+  "runner_path": "phase1_binance_backfill.py",
+  "runner_sha256": "48948de2534636e83b6ff249756ce6ffb2081eb7f89be0db50d821f2786d91e2",
+  "runner_tracked": true,
+  "runner_status": "clean",
+  "code_versioned": true,
+  "git_dirty": false,
+  "authorization": "Phase 1 autorisee (2026-06-23) : backfill Binance/ETHUSDT, 2 requetes temporelles FIXES non chevauchantes, limite<=1000, AUCUNE pagination/backfill au-dela. INTERDITS : agregation, annualisation, selection de venue, calibration, regle d'entree, PnL, conclusion de strategie.",
+  "requests": [
+    {
+      "name": "backfill_W1",
+      "url": "https://fapi.binance.com/fapi/v1/fundingRate?symbol=ETHUSDT&startTime=1750636800000&endTime=1766447999999&limit=1000",
+      "request_utc": "2026-06-24T01:25:03Z",
+      "http_status": 200,
+      "startTime": 1750636800000,
+      "startTime_utc": "2025-06-23T00:00:00Z",
+      "endTime": 1766447999999,
+      "endTime_utc": "2025-12-22T23:59:59Z",
+      "limit": 1000,
+      "bytes": 57171,
+      "sha256": "3c359271842b8a1fe7db54ab6b01fbb8c1c51f1f426b05a69edd8e47ec28496a",
+      "raw_path": "data/raw/funding/binance/phase1/backfill_W1_20260624T012503Z.json",
+      "records_returned": 549,
+      "first_fundingTime_utc": "2025-06-23T00:00:00Z",
+      "last_fundingTime_utc": "2025-12-22T16:00:00Z",
+      "truncation_suspected": false
+    },
+    {
+      "name": "backfill_W2",
+      "url": "https://fapi.binance.com/fapi/v1/fundingRate?symbol=ETHUSDT&startTime=1766448000000&endTime=1782172800000&limit=1000",
+      "request_utc": "2026-06-24T01:25:04Z",
+      "http_status": 200,
+      "startTime": 1766448000000,
+      "startTime_utc": "2025-12-23T00:00:00Z",
+      "endTime": 1782172800000,
+      "endTime_utc": "2026-06-23T00:00:00Z",
+      "limit": 1000,
+      "bytes": 57006,
+      "sha256": "b0cb51764535ef79da9daf1971e0857e436b11f6f425c5ceb2bb79def4e15ac3",
+      "raw_path": "data/raw/funding/binance/phase1/backfill_W2_20260624T012503Z.json",
+      "records_returned": 546,
+      "first_fundingTime_utc": "2025-12-23T00:00:00Z",
+      "last_fundingTime_utc": "2026-06-22T16:00:00Z",
+      "truncation_suspected": false
+    }
+  ],
+  "non_overlap_check": {
+    "w1_end_ms": 1766447999999,
+    "w1_end_utc_ms": "2025-12-22T23:59:59.999Z",
+    "w2_start_ms": 1766448000000,
+    "w2_start_utc": "2025-12-23T00:00:00Z",
+    "delta_ms_between_windows": 1,
+    "overlap": false
+  },
+  "qc": {
+    "records_raw_total": 1095,
+    "raw_ascending_per_window": [
+      true,
+      true
+    ],
+    "seam_ordered": true,
+    "duplicates_removed": 0,
+    "duplicate_fundingTimes_utc": [],
+    "records_after_dedup": 1095,
+    "base_interval_ms": 28800000,
+    "nominal_settlements_half_open": 1095,
+    "no_interpolation": true,
+    "monotonic_strict": true,
+    "first_settlement_utc": "2025-06-23T00:00:00Z",
+    "last_settlement_utc": "2026-06-22T16:00:00Z",
+    "first_offset_ms_from_window_start": 0,
+    "last_offset_ms_from_window_end": -28799998,
+    "reaches_window_start": true,
+    "reaches_window_end": true,
+    "gaps": [],
+    "gaps_count": 0,
+    "missing_settlements_total": 0,
+    "sub_interval_anomalies": [],
+    "observed_interval_hours_histogram": {
+      "8": 1094
+    },
+    "nstep_histogram": {
+      "1": 1094
+    },
+    "raw_delta_ms_min": 28799984,
+    "raw_delta_ms_max": 28800016,
+    "contiguous": true
+  },
+  "verdict": "COLLECTE_COMPLETE",
+  "abstentions": [],
+  "note": "Serie BRUTE certifiee (timestamps/couverture) UNIQUEMENT. Bruts hors Git, hashes. AUCUNE agregation/annualisation/PnL/calibration/choix de venue. Aucun travail economique sans nouvelle validation humaine."
+}
