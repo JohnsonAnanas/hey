@@ -61,3 +61,13 @@ def test_constantes_controle():
     assert FEE == 500 and TICKSPACING == 100
     assert UNI_ROUTER.lower() == "0x2626664c2603336e57b271c5c0b26f421741e481"
     assert SLIP_ROUTER.lower() == "0xbe6d8f0d05cc4be24d5167a3ef062215be6d18a5"
+
+
+def test_provenance_compilateur_figee():
+    # version solc COMPLETE, reglages de compilation et hash du binaire compilateur figes (demande humaine)
+    meta = json.load(open(EXEC_JSON, encoding="utf-8"))
+    assert meta["solc_version"] == "0.8.26"
+    assert meta["solc_full_version"].startswith("0.8.26+commit.")
+    assert meta["evm_version"] == "cancun"
+    assert meta["optimizer"]["enabled"] is True and meta["optimizer"]["runs"] == 200
+    assert meta.get("solc_binary_sha256") and len(meta["solc_binary_sha256"]) == 64

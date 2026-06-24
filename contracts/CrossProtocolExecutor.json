@@ -116,5 +116,13 @@
       "stateMutability": "nonpayable",
       "type": "function"
     }
-  ]
+  ],
+  "solc_full_version": "0.8.26+commit.8a97fa7a",
+  "evm_version": "cancun",
+  "optimizer": {
+    "enabled": true,
+    "runs": 200
+  },
+  "solc_binary_sha256": "537fd8d8d4a0433a971bf456fc06f7b021cdcee27b252f74da49e0d8559aeb67",
+  "compiler_provenance_note": "compilation deterministe ; bytecode inchange (verifie). solc gere par py-solc-x. Recompiler avec la meme version+optimizer reproduit le bytecode."
 }
