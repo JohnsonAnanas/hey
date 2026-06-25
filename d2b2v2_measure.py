@@ -62,11 +62,11 @@ def _decode_anchor(res):
     return int.from_bytes(b[32:64], "big", signed=True), int.from_bytes(b[96:128], "big")
 
 
-def measure_cycles(url, OV, routes, blocks, sizes, dirs, limiter, concurrency, archive):
+def measure_cycles(url, OV, routes, blocks, sizes, dirs, limiter, concurrency, archive, max_retry=6):
     """Mesure (fidelite corrigee) sous limiteur CUPS + concurrence bornee. concurrency=1 -> reference ;
     K -> production. Schema record IDENTIQUE (route_hash/block/size_usd/direction/category[/champs ok]).
     3 rounds/bloc : R1 getCode+getBlock+oracle ; R2 eth_call(exec)+estimateGas (cycles 2 pools presents) ;
-    R3 getL1Fee (cycles exec ok). Tous au MEME blockTag=b."""
+    R3 getL1Fee (cycles exec ok). Tous au MEME blockTag=b. max_retry : prod=6 ; probe=2 (fail-fast plafond)."""
     records = []
     for b in blocks:
         bhex = hex(b)
@@ -79,7 +79,7 @@ def measure_cycles(url, OV, routes, blocks, sizes, dirs, limiter, concurrency, a
         r1_calls = [("eth_getCode", [p, bhex]) for p in pools]
         r1_calls.append(("eth_getBlockByNumber", [bhex, False]))
         r1_calls.append(("eth_call", [{"to": CHAINLINK_ETH_USD, "data": "0x" + SEL_LATESTROUNDDATA.hex()}, bhex]))
-        r1 = run_calls(url, r1_calls, limiter, concurrency, archive)
+        r1 = run_calls(url, r1_calls, limiter, concurrency, archive, max_retry=max_retry)
         pstate = {p: pool_state(*r1[k]) for k, p in enumerate(pools)}
         blk_res, blk_err, blk_infra = r1[len(pools)]
         if blk_infra or blk_err is not None or blk_res is None:
@@ -110,7 +110,7 @@ def measure_cycles(url, OV, routes, blocks, sizes, dirs, limiter, concurrency, a
         for (r, other, s, d, cd) in cyc:
             r2_calls.append(("eth_call", [{"from": FROM, "to": FAKE, "data": "0x" + cd.hex()}, bhex, OV]))
             r2_calls.append(("eth_estimateGas", [{"from": FROM, "to": FAKE, "value": "0x0", "data": "0x" + cd.hex()}, bhex, OV]))
-        r2 = run_calls(url, r2_calls, limiter, concurrency, archive)
+        r2 = run_calls(url, r2_calls, limiter, concurrency, archive, max_retry=max_retry)
 
         # ---- R3 : getL1Fee pour exec ok + estimateGas dispo + base_fee dispo ----
         stage, r3_calls, r3_index = {}, [], {}
@@ -125,7 +125,7 @@ def measure_cycles(url, OV, routes, blocks, sizes, dirs, limiter, concurrency, a
                 r3_index[(r["route_hash"], s, d)] = len(r3_calls)
                 r3_calls.append(("eth_call", [{"to": GASORACLE, "data": "0x" + (SEL_GETL1FEE + abi_encode(["bytes"], [ser])).hex()}, bhex]))
             stage[(r["route_hash"], s, d)] = (out_res, out_err, est, gu)
-        r3 = run_calls(url, r3_calls, limiter, concurrency, archive) if r3_calls else []
+        r3 = run_calls(url, r3_calls, limiter, concurrency, archive, max_retry=max_retry) if r3_calls else []
 
         # ---- classification finale (ordre deterministe routes x sizes x dirs) ----
         for r in routes:

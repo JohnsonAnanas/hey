@@ -91,11 +91,12 @@ def rpc1(session, url, method, params, limiter, archive, max_retry: int = 6, sle
                   % (max_retry, method, last)}, True
 
 
-def run_calls(url, calls, limiter, concurrency: int, archive, session_factory=requests.Session):
+def run_calls(url, calls, limiter, concurrency: int, archive, session_factory=requests.Session, max_retry: int = 6):
     """calls: list[(method, params)] -> list[(result, error, infra)] dans le MEME ordre.
 
     concurrency<=1 : sequentiel (reference). concurrency>1 : pool de threads borne (production). Le resultat
     de chaque appel ne depend que de (method, params, blockTag) -> identique quelle que soit la concurrence.
+    max_retry : passe a rpc1 (prod=6 resilient ; probe=2 fail-fast pour detecter vite le plafond CUPS).
     """
     n = len(calls)
     results = [None] * n
@@ -108,7 +109,7 @@ def run_calls(url, calls, limiter, concurrency: int, archive, session_factory=re
         return s
 
     def work(i):
-        results[i] = rpc1(session(), url, calls[i][0], calls[i][1], limiter, archive)
+        results[i] = rpc1(session(), url, calls[i][0], calls[i][1], limiter, archive, max_retry=max_retry)
 
     if concurrency <= 1:
         for i in range(n):

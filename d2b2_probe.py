@@ -25,8 +25,9 @@ from d2b1_liveness import ORIENTATIONS  # noqa: E402
 from d2b2v2_measure import measure_cycles, overrides, provenance  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PROBE_POINTS = [(380, 8), (450, 9), (520, 10), (600, 12), (700, 13), (820, 15), (950, 17), (1100, 18)]
-PROBE_NBLOCKS = 13               # 13 derniers blocs (B1-12..B1) : pools presents -> charge exec MAX
+PROBE_POINTS = [(380, 8), (450, 9), (520, 10), (600, 12), (700, 13), (820, 15), (950, 17)]
+PROBE_NBLOCKS = 6                # 6 derniers blocs (B1-5..B1) : pools presents -> charge exec realiste (~1 min/point)
+PROBE_MAX_RETRY = 2             # fail-fast : detecter vite le plafond (un point saturant n'epuise pas 8s de backoff x6)
 BENCH_SIZES = [250, 10000]
 MARGIN = 0.82                    # throttle serie <= 82% du plus haut point propre
 CU_PER_CYCLE = CU_COST["eth_call"] * 2 + CU_COST["eth_estimateGas"] + 15
@@ -51,7 +52,8 @@ def main() -> int:
     for (cups, k) in PROBE_POINTS:
         arch = []
         t0 = time.time()
-        recs = measure_cycles(url, OV, routes, blocks, BENCH_SIZES, ORIENTATIONS, CupsLimiter(cups), k, arch)
+        recs = measure_cycles(url, OV, routes, blocks, BENCH_SIZES, ORIENTATIONS, CupsLimiter(cups), k, arch,
+                              max_retry=PROBE_MAX_RETRY)
         dt = time.time() - t0
         cc = {}
         for r in recs:
@@ -66,6 +68,13 @@ def main() -> int:
                      "cups_observee_estimee": round(cyc_s * CU_PER_CYCLE),
                      "eta_per_lot_min": round(per_lot / cyc_s / 60, 1) if cyc_s else None,
                      "eta_total_h": round(total / cyc_s / 3600, 2) if cyc_s else None})
+        # ecriture INCREMENTALE (pas de perte sur interruption) + progression
+        json.dump({"phase": "D2B-2-probe-throttle", "en_cours": True, "points_partiels": rows,
+                   "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), **prov},
+                  open(os.path.join(run_dir, "manifest.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+        print("[point %d/%d] cups=%d k=%d -> %.2f cyc/s | transport_errors=%d infra=%d win@B1=%d | %s | ETA=%sh"
+              % (len(rows), len(PROBE_POINTS), cups, k, rows[-1]["cyc_s"], rows[-1]["transport_errors"],
+                 rows[-1]["infra"], rows[-1]["window_at_B1"], rows[-1]["status"], rows[-1]["eta_total_h"]), flush=True)
         if not clean:
             ceiling = True
             break                                              # arret des le premier point sale
