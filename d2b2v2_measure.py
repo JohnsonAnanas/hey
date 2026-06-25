@@ -45,9 +45,13 @@ from d2b2_measure import (  # noqa: E402  (fonctions PURES + constantes ; classi
     CAT_OK, CAT_CAPACITY, CAT_WINDOW, CAT_INFRA, CATEGORIES)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-# Throttle PRODUCTION (a calibrer par d2b2_bench AVANT la serie ; conservateur par defaut).
-CUPS_PROD = 220                  # budget CU/seconde du limiteur (Alchemy free ~330 -> marge)
-CONCURRENCY_PROD = 5             # threads bornes
+# Throttle PRODUCTION FIGE (probe d2b2_probe @ddc28da, run 20260625T005108Z) : 380/8 = point propre le plus
+# rapide ET le plus fiable (0 erreur/0 infra/0 WINDOW@B1) ; au-dela de 380, pas de gain (debit latence/
+# structure-borne, bruite). ETA serie ~50-64 h, tier gratuit. Fige aussi dans chaque manifeste de lot.
+# INTERDIT pendant cette serie (contrainte validee) : parallelisation entre blocs, tier RPC payant
+# (= nouvelle methode -> nouveau pre-enregistrement).
+CUPS_PROD = 380                  # budget CU/seconde du limiteur (FIGE)
+CONCURRENCY_PROD = 8             # threads bornes (FIGE)
 
 
 def overrides(bytecode: str) -> dict:
