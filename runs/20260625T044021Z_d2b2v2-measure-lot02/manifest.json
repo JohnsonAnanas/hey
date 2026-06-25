@@ -1,0 +1,45 @@
+{
+  "phase": "D2B-2-v2-measure",
+  "lot_index": 2,
+  "transport": "async borne + limiteur CUPS (token-bucket CU/s) ; plus de batch burst",
+  "throttle": {
+    "cups": 380,
+    "concurrency": 8
+  },
+  "fidelite": "regle 3 corrigee : getCode echoue -> NON_CONCLUANT_INFRA ; WINDOW_UNAVAILABLE seulement si getCode=0x confirme ; oracle/gas/block/l1fee echoue -> INFRA, jamais gas=0",
+  "categories": [
+    "ok",
+    "CAPACITY",
+    "WINDOW_UNAVAILABLE",
+    "NON_CONCLUANT_INFRA"
+  ],
+  "window": {
+    "B1": 47762470,
+    "b_start": 47762171,
+    "b_end": 47762470,
+    "n_blocks": 300
+  },
+  "created_utc": "2026-06-25T04:40:21Z",
+  "git_hash": "8175837e0ff0bb802c2d75113e4c6885041858a9",
+  "runner_path": "d2b2v2_measure.py",
+  "runner_sha256": "af9f1bd5f8ecc3c6954a4bc99931ba2dc4cc612aeecd0febde78e81d55c9481c",
+  "code_versioned": true,
+  "git_dirty": false,
+  "categories_counts": {
+    "ok": 15000,
+    "CAPACITY": 0,
+    "WINDOW_UNAVAILABLE": 0,
+    "NON_CONCLUANT_INFRA": 0
+  },
+  "cycles_traites": 15000,
+  "transport_errors_count": 0,
+  "receipts": [
+    {
+      "name": "lot02",
+      "sha256": "3d1f6fff92214a8536f8c764a0f9c1d8aeb2ad66f44477b17d4d72016abaa925",
+      "raw_path": "data/raw/defi/d2b2v2/lot02_20260625T044021Z.json"
+    }
+  ],
+  "verdict": "LOT_MESURE",
+  "note": "NON_CONCLUANT_INFRA = echec transport/CUPS/oracle/gas apres retries -> lot ENTIER a re-run (jamais fusionne). LOT_MESURE seulement si 0 infra. Aucun verdict economique."
+}
