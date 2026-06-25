@@ -1,28 +1,44 @@
-# D2B2-v2 — changement de TRANSPORT RPC (sémantique inchangée)
+# D2B2-v2 — transport async borné (limiteur CUPS) + fidélité REGLE 3 corrigée
 
-> Suite à l'arrêt volontaire de performance (`D2B2_ABORTED_PERFORMANCE`), D2B2-v2 accélère **uniquement le
-> transport RPC**. **Sémantique strictement identique à v1** (`d2b2_measure.py` @938b6a5) : mêmes routes,
-> ordre gelé, fenêtre [B1−299, B1], tailles, exécuteur, state-overrides, oracle Chainlink, catégories et
-> schéma raw. **Aucune baisse de fidélité.**
+> **Pourquoi cette révision.** La première tentative v2 (JSON-RPC **batch**) a contaminé le lot 0 (~68 %) :
+> les gros batchs override-heavy saturaient le **rate-limit PAR SECONDE** d'Alchemy (CUPS) → réponses vides +
+> 429 « compute units per second ». Pire, un **bug de fidélité latent (partagé avec v1)** transformait
+> **silencieusement** un `getCode` échoué en faux « pool absent » (WINDOW_UNAVAILABLE). Les deux sont corrigés
+> ici (réouverture validée de la règle 3). Lot 0 v2 reste en quarantaine `NON_CONCLUANT`, jamais fusionné.
 
-## Ce qui change (transport seul)
-- **JSON-RPC batch** (supporté par Alchemy : un POST = N requêtes, vérifié read-only).
-- **IDs de requêtes stables** ; réponses **réordonnées de manière déterministe par id** (`reorder_by_id`).
-- Chunks `≤ BATCH_CHUNK` (override-heavy → conservateur) ; **retries et erreurs de transport toujours
-  archivés** dans le raw.
-- 2 rounds batchés par bloc : (A) `getCode` + `getBlock` + oracle + `eth_call` + `eth_estimateGas` ;
-  (B) `getL1Fee` (dépend de `gas_units` de A). **Tous au MÊME `blockTag=b`.**
+## Correction 1 — FIDÉLITÉ (jamais de compensation silencieuse)
+Fonctions **pures** partagées (`d2b2_measure.py`), utilisées par **v1 et v2** :
+- `pool_state(result, error, infra)` → `present` / `absent` / **`infra`**. `absent` **uniquement** si `getCode`
+  réussit et renvoie explicitement `0x`. Tout échec transport/CUPS/erreur RPC/résultat absent → `infra`.
+- `exec_state(result, error, infra)` → `ok` / `revert` (échec déterministe = capacité) / `infra`.
+- `classify_cycle2(uni, slip, exec, anchor_ok, gas_ok)` → `ok` / `CAPACITY` / `WINDOW_UNAVAILABLE` /
+  **`NON_CONCLUANT_INFRA`**. L'**infra prime** : on ne conclut jamais absence/capacité sur information
+  incomplète. Oracle/gas/getBlock/getL1Fee manquant → `NON_CONCLUANT_INFRA` (**jamais gas=0**).
 
-## Ce qui NE change PAS (fidélité)
-- Mêmes appels, mêmes paramètres, même `blockTag=b` pour `eth_call`/`estimateGas`/`getL1Fee`/oracle ; même
-  `serialize_dummy_1559(gas_units, …)` → **mêmes octets, mêmes résultats**. Réutilise les **fonctions PURES
-  de v1** (`window_blocks`, `anchor_eth_usd`, `gas_normal_usdc`, `upper_bound_usdc`, `classify_cycle`).
-- Namespace **distinct** (`*_d2b2v2-measure-lotNN`, `data/raw/defi/d2b2v2/`) → jamais mélangé avec les
-  partiels classés `D2B2_ABORTED_PERFORMANCE`.
+## Correction 2 — TRANSPORT (`cups_transport.py`)
+Plus de batch burst. Chaque appel passe par :
+- un **limiteur token-bucket CU/seconde** (`CupsLimiter`) réglé **avant** le run (par benchmark) ;
+- une **concurrence bornée** : `concurrency=1` = référence séquentielle, `K` = production. Le résultat d'un
+  appel ne dépend que de `(method, params, blockTag)` → **identique quelle que soit la concurrence**.
+- détection CUPS/vide/429 → **retries avec backoff, toujours archivés** ; après épuisement → `infra=True`
+  (le cycle devient `NON_CONCLUANT_INFRA`, **jamais** un faux « absent »).
 
-## Garantie avant run complet
-`d2b2_bench.py` compare **résultat-à-résultat** la référence séquentielle v1-exacte (`measure_seq_ref`) et
-la mesure batchée v2 (`measure_batched`) sur un **petit ensemble préenregistré** ; verdict `EQUIVALENT` requis
-(byte/résultat identiques) avant toute relance de la série. Le benchmark mesure aussi débit, erreurs et **ETA
-réelle** ; **aucun résultat économique n'y est interprété**. La série complète (29 lots, ordre gelé) ne
-relance **que sur validation**.
+`measure_cycles(...)` (unifiée, dans `d2b2v2_measure.py`) : 3 rounds/bloc au **même `blockTag=b`** —
+R1 `getCode`+`getBlock`+oracle ; R2 `eth_call`(exec)+`estimateGas` (cycles 2 pools présents) ; R3 `getL1Fee`.
+
+## Politique de lot (règle 3)
+Un **seul** cycle `NON_CONCLUANT_INFRA` (après retries) ⇒ verdict **`LOT_NON_CONCLUANT_RETRY_REQUIRED`**.
+Jamais de lot partiellement contaminé accepté. Reprise = **re-run ENTIER** du lot (mêmes blocs/params/endpoint,
+throttle plus bas) ; **jamais** de fusion partiel ↔ reprise. Namespace distinct (`data/raw/defi/d2b2v2/`).
+
+## Benchmark durci AVANT toute série (`d2b2_bench.py`)
+- **Chemin succès + équivalence** : `measure_cycles` concurrency=1 vs K → résultats byte/identiques.
+- **B1 connu vivant** : au bloc B1, les routes du lot 0 (prouvées vivantes en D2B-1) ne deviennent **jamais**
+  WINDOW_UNAVAILABLE.
+- **Débit soutenable sans erreur** : rampe de `(cups, concurrency)` → plus haut débit avec **0 erreur / 0
+  infra** → throttle recommandé + **ETA réelle** (par lot / 29 lots) + CUPS observée (estimée).
+- **Chemin d'échec** (`getCode` None/0x/empty/CUPS → INFRA, jamais faux absent/gas=0) couvert par les tests
+  **offline** `test_d2b2_fidelity.py` + `test_cups_transport.py` (injection déterministe).
+
+Aucun résultat économique n'est interprété pendant le benchmark. La série complète (29 lots, ordre gelé) ne
+relance **que sur nouvelle validation**.

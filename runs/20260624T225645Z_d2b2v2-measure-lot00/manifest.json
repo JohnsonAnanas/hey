@@ -1,0 +1,33 @@
+{
+  "phase": "D2B-2-v2-measure",
+  "lot_index": 0,
+  "transport": "JSON-RPC batch (semantique v1)",
+  "window": {
+    "B1": 47762470,
+    "b_start": 47762171,
+    "b_end": 47762470,
+    "n_blocks": 300
+  },
+  "created_utc": "2026-06-24T22:56:45Z",
+  "git_hash": "abe2908586ab795a20798123393a704e0aa7b1f3",
+  "runner_path": "d2b2v2_measure.py",
+  "runner_sha256": "d210e5d9a4f1cd990ecc68a2a1e8c260dc22a6105881c54469ceda91319cc160",
+  "code_versioned": true,
+  "git_dirty": false,
+  "categories_counts": {
+    "ok": 4759,
+    "CAPACITY": 0,
+    "WINDOW_UNAVAILABLE": 7080,
+    "NON_CONCLUANT": 3161
+  },
+  "cycles_traites": 15000,
+  "transport_errors_count": 767,
+  "receipts": [
+    {
+      "name": "lot00",
+      "sha256": "da36fbb967ee1eda73629582ec5d7e9b53f6d18ae75cfe16a29b866ad5938523",
+      "raw_path": "data/raw/defi/d2b2v2/lot00_20260624T225645Z.json"
+    }
+  ],
+  "verdict": "LOT_MESURE_AVEC_NON_CONCLUANTS"
+}

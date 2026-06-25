@@ -17,13 +17,14 @@ REGLE 2 (formule, ancre ETH/USD ON-CHAIN INDEPENDANTE des pools cibles) :
   prefixe avant donnees). INDEPENDANTE des pools mesures (oracle, pas un pool). Absence/staleness/erreur du
   feed -> NON_CONCLUANT pour ce point, JAMAIS gas=0.
 
-REGLE 3 (disponibilite historique, categories SEPAREES) :
-  - pool/code ABSENT au bloc b -> WINDOW_UNAVAILABLE (pas un revert de capacite) ;
+REGLE 3 (disponibilite historique, categories SEPAREES ; FIDELITE CORRIGEE -- reouverture validee) :
+  - WINDOW_UNAVAILABLE UNIQUEMENT si getCode REUSSIT et renvoie explicitement 0x (absence CONFIRMEE) ;
+  - getCode/oracle/gas/getBlock/getL1Fee echoue (transport/CUPS/timeout) -> NON_CONCLUANT_INFRA : un getCode
+    echoue ne doit JAMAIS etre lu comme "pool absent", et l'ancre/gas manquant ne doit JAMAIS donner gas=0 ;
   - revert d'EXECUTION sur une route reellement presente (pools avec code) -> resultat de CAPACITE
-    (limite de capacite OPERATIONNELLE ; les 145 routes ont deja passe les deux sens a $250 ; on conserve
-    le reason BRUT, sans pretendre que chaque revert est uniquement un probleme de liquidite) ;
-  - erreur RPC/override/quoteur/cout -> NON_CONCLUANT ;
-  - ces categories sont separees dans les sorties.
+    (limite OPERATIONNELLE ; reason BRUT conserve, pas reduit a la liquidite) ;
+  - un seul NON_CONCLUANT_INFRA dans un lot -> LOT_NON_CONCLUANT_RETRY_REQUIRED (re-run lot ENTIER, jamais
+    fusionne) ; ces categories sont separees dans les sorties (cf. classify_cycle2).
 
 REGLE 4 : les 29 lots restent obligatoires, dans l'ordre gele, sans modification apres un resultat. Reverts
 et indisponibilites RESTENT dans les raw et manifests.
@@ -96,7 +97,11 @@ def upper_bound_usdc(out_usdc_6dec: int, in_usdc_6dec: int, gas_norm_usdc: float
 
 
 def classify_cycle(pool_present: bool, exec_status: str, anchor_ok: bool, gas_ok: bool) -> str:
-    """Categories SEPAREES (regle 3). exec_status: 'ok'/'revert'/'rpcerror'."""
+    """[LEGACY] Categories (regle 3 v1). exec_status: 'ok'/'revert'/'rpcerror'. Conserve pour compat tests.
+
+    BUG DE FIDELITE connu : prend un bool pool_present qui ne distingue PAS "getCode a renvoye 0x" (absence
+    confirmee) de "getCode a echoue" (infra). NE PLUS UTILISER dans les runners -> classify_cycle2.
+    """
     if not pool_present:
         return "WINDOW_UNAVAILABLE"
     if exec_status == "rpcerror":
@@ -106,6 +111,54 @@ def classify_cycle(pool_present: bool, exec_status: str, anchor_ok: bool, gas_ok
     if not (anchor_ok and gas_ok):
         return "NON_CONCLUANT"                  # ancre/gas manquant -> NON_CONCLUANT, jamais gas=0
     return "ok"
+
+
+# --- Regle 3 CORRIGEE (fidelite) : tri-etats + categorie infra explicite ; jamais de faux "absent" ---
+CAT_OK = "ok"
+CAT_CAPACITY = "CAPACITY"
+CAT_WINDOW = "WINDOW_UNAVAILABLE"
+CAT_INFRA = "NON_CONCLUANT_INFRA"               # getCode/oracle/gas/getBlock/getL1Fee/transport echoue -> retry lot
+CATEGORIES = [CAT_OK, CAT_CAPACITY, CAT_WINDOW, CAT_INFRA]
+
+
+def pool_state(result, error, infra: bool) -> str:
+    """Tri-etat de presence d'un pool a partir d'une reponse getCode (result, error, infra).
+
+    'infra' si echec transport/CUPS (infra) OU erreur RPC OU resultat absent -> presence INDETERMINEE.
+    'absent' UNIQUEMENT si getCode a REUSSI et renvoie explicitement '0x'. 'present' si code non vide.
+    """
+    if infra or error is not None or result is None:
+        return "infra"
+    if result == "0x":
+        return "absent"
+    return "present"
+
+
+def exec_state(result, error, infra: bool) -> str:
+    """Tri-etat de l'eth_call d'execution -> 'ok' / 'revert' (echec deterministe = capacite) / 'infra'."""
+    if infra:
+        return "infra"
+    if error is not None:
+        return "revert" if classify(error) == "revert" else "infra"
+    if result is None:
+        return "infra"
+    return "ok"
+
+
+def classify_cycle2(uni_state: str, slip_state: str, exec_st: str, anchor_ok: bool, gas_ok: bool) -> str:
+    """Categorie d'un cycle a partir des tri-etats. L'INFRA prime : on ne conclut JAMAIS absence/capacite
+    sur information incomplete. WINDOW_UNAVAILABLE uniquement sur absence CONFIRMEE (getCode reussi = 0x)."""
+    if uni_state == "infra" or slip_state == "infra":
+        return CAT_INFRA
+    if uni_state == "absent" or slip_state == "absent":
+        return CAT_WINDOW                       # au moins un pool confirme absent -> fenetre indisponible
+    if exec_st == "infra":
+        return CAT_INFRA
+    if exec_st == "revert":
+        return CAT_CAPACITY
+    if not (anchor_ok and gas_ok):
+        return CAT_INFRA                        # oracle/gas/getBlock/getL1Fee manquant -> infra, jamais gas=0
+    return CAT_OK
 
 
 # ----------------------------------------------------------------------------- gouvernance
@@ -169,7 +222,7 @@ def main() -> int:
                            "guards": ["answer>0", "updatedAt<=ts(b)", f"ts(b)-updatedAt<={STALENESS_MAX_S}s"],
                            "staleness_max_s": STALENESS_MAX_S,
                            "on_invalid": "NON_CONCLUANT (jamais gas=0)"},
-        "categories": ["ok", "CAPACITY", "WINDOW_UNAVAILABLE", "NON_CONCLUANT"],
+        "categories": CATEGORIES,
         "params": {"sizes_usd": SIZES_USD, "directions": ORIENTATIONS, "usdc": USDC, "usdc_slot": USDC_SLOT},
         "lots_source": (os.path.relpath(plan_path, HERE).replace("\\", "/") if plan_path else None),
         "plan_digest": (plan or {}).get("plan_digest_sha256"),
@@ -186,30 +239,32 @@ def main() -> int:
     if not _slot_ok(url, OV) or not _code_override_ok(url):
         return _abort(run_dir, manifest, "garde-fou KO (slot USDC ou code-override) -> NON_CONCLUANT")
 
-    cycles, cat = [], {"ok": 0, "CAPACITY": 0, "WINDOW_UNAVAILABLE": 0, "NON_CONCLUANT": 0}
+    cycles, cat = [], {c: 0 for c in CATEGORIES}
     code_cache, block_cache = {}, {}     # block_cache[b] = (base_fee, eth_usd)
     for r in lot["routes"]:
         other = r["token1"] if Web3.to_checksum_address(r["token0"]) == USDC else r["token0"]
         for b in range(b_start, b_end + 1):
             bhex = hex(b)
-            present = (_pool_present(url, r["uni_pool"], b, code_cache)
-                       and _pool_present(url, r["slip_pool"], b, code_cache))
+            us = _pool_state(url, r["uni_pool"], b, code_cache)
+            ss = _pool_state(url, r["slip_pool"], b, code_cache)
+            both_present = us == "present" and ss == "present"
             if b not in block_cache:
                 block_cache[b] = _block_bf_anchor(url, bhex)
             bf, eth_usd = block_cache[b]
+            anchor_ok = eth_usd is not None and eth_usd > 0
             for s in SIZES_USD:
                 for d in ORIENTATIONS:
                     rec = {"route_hash": r["route_hash"], "block": b, "size_usd": s, "direction": d}
-                    if not present:
-                        rec["category"] = "WINDOW_UNAVAILABLE"
-                        cat["WINDOW_UNAVAILABLE"] += 1; cycles.append(rec); continue
+                    if not both_present:
+                        rec["category"] = classify_cycle2(us, ss, "infra", anchor_ok, False)
+                        if rec["category"] == CAT_INFRA:
+                            rec["reason_raw"] = "getCode infra (presence indeterminee, retry requis)"
+                        cat[rec["category"]] += 1; cycles.append(rec); continue
                     cd = exec_calldata(d, USDC, other, r["uni_fee"], r["slip_tickSpacing"], s * 10 ** 6)
                     out_res, out_err = raw_rpc(url, "eth_call",
                                                [{"from": FROM, "to": FAKE, "data": "0x" + cd.hex()}, bhex, OV])
-                    est = classify(out_err) if out_err else ("ok" if out_res is not None else "rpcerror")
-                    gas_ok = False
-                    anchor_ok = eth_usd is not None and eth_usd > 0
-                    gu = l1 = None
+                    est = exec_state(out_res, out_err, False)
+                    gas_ok = False; gu = l1 = None
                     if est == "ok":
                         gres, gerr = raw_rpc(url, "eth_estimateGas",
                                              [{"from": FROM, "to": FAKE, "value": "0x0", "data": "0x" + cd.hex()}, bhex, OV])
@@ -220,18 +275,19 @@ def main() -> int:
                                                  [{"to": GASORACLE, "data": "0x" + (SEL_GETL1FEE + abi_encode(["bytes"], [ser])).hex()}, bhex])
                             if lres and not lerr:
                                 l1 = int(lres, 16); gas_ok = True
-                    rec["category"] = classify_cycle(present, est, anchor_ok, gas_ok)
-                    if rec["category"] == "ok":
-                        gnw = gas_normal_wei(gu, bf, l1)
-                        gnu = gas_normal_usdc(gnw, eth_usd)
+                    rec["category"] = classify_cycle2(us, ss, est, anchor_ok, gas_ok)
+                    if rec["category"] == CAT_OK:
+                        gnu = gas_normal_usdc(gas_normal_wei(gu, bf, l1), eth_usd)
                         rec.update({"out_usdc_6dec": int(out_res, 16), "gas_units_l2": gu, "base_fee_l2": bf,
                                     "l1_fee_wei": l1, "eth_usd": round(eth_usd, 4),
                                     "upper_bound_usd": round(upper_bound_usdc(int(out_res, 16), s * 10 ** 6, gnu), 6)})
-                    elif rec["category"] == "CAPACITY":
+                    elif rec["category"] == CAT_CAPACITY:
                         rec["reason_raw"] = (out_err.get("message", "") if isinstance(out_err, dict) else str(out_err))[:140]
-                    elif rec["category"] == "NON_CONCLUANT":
-                        rec["reason_raw"] = ("ancre/gas manquant" if est == "ok"
-                                             else (out_err.get("message", "") if isinstance(out_err, dict) else str(out_err))[:140])
+                    elif rec["category"] == CAT_INFRA:
+                        rec["reason_raw"] = ("oracle/ancre indisponible (infra)" if est == "ok" and not anchor_ok
+                                             else "gas/getL1Fee indisponible (infra)" if est == "ok"
+                                             else (out_err.get("message", "") if isinstance(out_err, dict) else str(out_err))[:140]
+                                             if out_err else "exec infra")
                     cat[rec["category"]] += 1
                     cycles.append(rec)
 
@@ -245,11 +301,12 @@ def main() -> int:
         "cycles_traites": len(cycles), "categories_counts": cat,
         "receipts": [{"name": f"lot{args.lot:02d}", "sha256": hashlib.sha256(raw).hexdigest(),
                       "raw_path": os.path.relpath(raw_path, HERE).replace("\\", "/")}],
-        "verdict": "LOT_MESURE" if cat["NON_CONCLUANT"] == 0 else "LOT_MESURE_AVEC_NON_CONCLUANTS",
+        "verdict": "LOT_MESURE" if cat[CAT_INFRA] == 0 else "LOT_NON_CONCLUANT_RETRY_REQUIRED",
         "note": ("Bornes superieures hors priorite MEV ; AUCUN verdict economique. CAPACITY = limite "
-                 "OPERATIONNELLE (reason brut conserve, pas reduit a la liquidite) ; WINDOW_UNAVAILABLE = "
-                 "pool absent au bloc. Reverts + indisponibilites CONSERVES dans raw+manifest. Lot du plan "
-                 "gele, ordre inchange. Les 29 lots restent obligatoires."),
+                 "OPERATIONNELLE (reason brut conserve) ; WINDOW_UNAVAILABLE = absence CONFIRMEE (getCode=0x) ; "
+                 "NON_CONCLUANT_INFRA = echec transport/CUPS/oracle/gas apres retries -> lot ENTIER a re-run "
+                 "(jamais fusionne). Reverts + indisponibilites CONSERVES dans raw+manifest. Lot du plan gele, "
+                 "ordre inchange. Les 29 lots restent obligatoires."),
     })
     with open(os.path.join(run_dir, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
@@ -272,11 +329,12 @@ def _code_override_ok(url):
     return bool(r) and not e and int(r, 16) == 42
 
 
-def _pool_present(url, pool, b, cache):
+def _pool_state(url, pool, b, cache):
+    """Tri-etat de presence (fidelite) : 'present'/'absent'/'infra'. getCode echoue -> 'infra', jamais faux absent."""
     key = (pool, b)
     if key not in cache:
-        c, _ = raw_rpc(url, "eth_getCode", [pool, hex(b)])
-        cache[key] = bool(c and c != "0x")
+        c, e = raw_rpc(url, "eth_getCode", [pool, hex(b)])
+        cache[key] = pool_state(c, e, False)
     return cache[key]
 
 

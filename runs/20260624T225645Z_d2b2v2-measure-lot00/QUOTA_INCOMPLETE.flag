@@ -1,0 +1,16 @@
+LOT 00 D2B2-v2 — NON_CONCLUANT / CONTAMINÉ. NE JAMAIS INTERPRÉTER, NE JAMAIS FUSIONNER.
+
+CAUSE RÉELLE (le label initial "quota" était FAUX) :
+- Quota mensuel INTACT (sonde eth_blockNumber = OK après le lot).
+- Vraie cause = SATURATION du rate-limit PAR SECONDE d'Alchemy (CUPS) par le transport batch v2 :
+    * 1003 cycles NON_CONCLUANT motif "Your app has exceeded its compute units per second" (429 CUPS) ;
+    * 767 erreurs transport = réponses VIDES (JSONDecodeError) sur batchs de ~52 req override-heavy ;
+    * 400 cycles ID_ABSENT (réponses partielles) ; 1758 "ancre/gas manquant" (oracle/gas perdus au transport).
+- BUG DE FIDÉLITÉ LATENT (partagé avec v1 @938b6a5) : un getCode échoué (résultat None) est
+  silencieusement classé "pool absent" -> WINDOW_UNAVAILABLE, au lieu de NON_CONCLUANT.
+    * 106 blocs / 300 à 100% WINDOW_UNAVAILABLE (50/50) = signature d'un batch getCode échoué, PAS une vraie absence.
+    * Au bloc B1=47762470 (pools PROUVÉS vivants en D2B-1) : 36/50 NON_CONCLUANT — dégradation transport pure.
+
+VERDICT : ~68% des cycles corrompus par le transport. Catégories (ok/WINDOW_UNAVAILABLE/NON_CONCLUANT) NON FIABLES.
+REPRISE : interdite tant que (A) le bug de fidélité n'est pas corrigé dans les DEUX runners ET (B) le transport ne
+respecte pas le plafond CUPS, avec un benchmark couvrant le CHEMIN D'ÉCHEC (pas seulement le succès). Re-run ENTIER.

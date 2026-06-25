@@ -1,15 +1,23 @@
 #!/usr/bin/env python
-"""Runner D2B-2-v2 (MESURE par lot) — SEMANTIQUE IDENTIQUE a v1 (938b6a5), seul le TRANSPORT RPC change.
+"""Runner D2B-2-v2 (MESURE par lot) — fidelite REGLE 3 corrigee + transport async borne sous limiteur CUPS.
 
-Memes routes, ordre, blocs, tailles, executeur, state-overrides, oracle Chainlink, categories et schema raw
-que d2b2_measure (v1). Reutilise les MEMES fonctions PURES (fenetre, ancre, formule, categories). Le SEUL
-changement : transport JSON-RPC BATCH (un POST = N requetes), IDs stables, reponses reordonnees de maniere
-DETERMINISTE par id. Aucune baisse de fidelite : eth_call, estimateGas, getL1Fee et oracle restent tous au
-MEME blockTag=b. Retries et erreurs de transport TOUJOURS archives.
+Semantique de mesure identique a v1 sur le FOND (memes routes/ordre/blocs/tailles/executeur/state-overrides/
+oracle Chainlink/formule), mais avec deux corrections validees (reouverture regle 3) :
 
-Namespace DISTINCT de v1 (runs/*_d2b2v2-measure-lotNN, data/raw/defi/d2b2v2/) -> jamais melange avec
-D2B2_ABORTED_PERFORMANCE. Equivalence byte/resultat-a-resultat v1<->v2 prouvee par d2b2_bench.py avant tout
-run complet. Lecture seule ; aucun contrat/cle/wallet/tx/capital. Gate --lot requise.
+1) FIDELITE (jamais de compensation silencieuse) : un getCode echoue (transport/CUPS) NE devient PLUS un faux
+   "pool absent". WINDOW_UNAVAILABLE seulement si getCode REUSSIT et renvoie explicitement 0x. Tout echec
+   transport/oracle/gas/getBlock/getL1Fee -> NON_CONCLUANT_INFRA (jamais gas=0). (cf. pool_state/exec_state/
+   classify_cycle2 dans d2b2_measure.)
+
+2) TRANSPORT : plus de gros batch burst (qui saturait le rate-limit PAR SECONDE -> reponses vides + 429). Ici
+   transport async BORNE (concurrence K) sous un limiteur CUPS (token-bucket CU/s) regle AVANT le run par
+   benchmark. concurrency=1 = reference sequentielle ; K = production. Resultat par appel = fonction de
+   (method, params, blockTag) -> identique quelle que soit la concurrence.
+
+POLITIQUE LOT (regle 3) : un seul cycle NON_CONCLUANT_INFRA (apres retries) -> LOT_NON_CONCLUANT_RETRY_REQUIRED ;
+jamais de lot partiellement contamine accepte ; reprise = re-run ENTIER du lot (memes blocs/params/endpoint,
+throttle plus bas) ; jamais de fusion partiel<->reprise. Namespace DISTINCT (runs/*_d2b2v2-measure-lotNN,
+data/raw/defi/d2b2v2/). Lecture seule ; aucun contrat/cle/wallet/tx/capital. Gate --lot requise.
 """
 from __future__ import annotations
 
@@ -19,67 +27,29 @@ import hashlib
 import json
 import os
 import subprocess
-import time
 from datetime import datetime, timezone
 
-import requests
 from eth_abi import encode as abi_encode
 from web3 import Web3
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from archive_rpc import endpoints  # noqa: E402
+from cups_transport import CupsLimiter, run_calls  # noqa: E402
 from d1_mev_boundary_control import (  # noqa: E402
     serialize_dummy_1559, gas_normal_wei, mapping_slot, SEL_GETL1FEE, GASORACLE, CHAIN_ID)
-from d2b1_liveness import exec_calldata, classify, USDC, FAKE, FROM, HUGE, ORIENTATIONS  # noqa: E402
-from d2b2_measure import (  # noqa: E402  (fonctions PURES + constantes IDENTIQUES a v1)
-    B1, N_BLOCKS, SIZES_USD, USDC_SLOT, CHAINLINK_ETH_USD, CHAINLINK_DECIMALS, STALENESS_MAX_S,
-    SEL_LATESTROUNDDATA, window_blocks, anchor_eth_usd, gas_normal_usdc, upper_bound_usdc, classify_cycle)
+from d2b1_liveness import exec_calldata, USDC, FAKE, FROM, HUGE, ORIENTATIONS  # noqa: E402
+from d2b2_measure import (  # noqa: E402  (fonctions PURES + constantes ; classification fidelite corrigee)
+    B1, SIZES_USD, USDC_SLOT, CHAINLINK_ETH_USD, SEL_LATESTROUNDDATA, window_blocks, anchor_eth_usd,
+    gas_normal_usdc, upper_bound_usdc, pool_state, exec_state, classify_cycle2,
+    CAT_OK, CAT_CAPACITY, CAT_WINDOW, CAT_INFRA, CATEGORIES)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BATCH_CHUNK = 60                 # requetes/POST (override-heavy -> conservateur)
-SEL_GETCODE = None               # eth_getCode est une methode, pas un selecteur
+# Throttle PRODUCTION (a calibrer par d2b2_bench AVANT la serie ; conservateur par defaut).
+CUPS_PROD = 220                  # budget CU/seconde du limiteur (Alchemy free ~330 -> marge)
+CONCURRENCY_PROD = 5             # threads bornes
 
 
-# ----------------------------------------------------------------------------- transport BATCH (testable en partie)
-def build_request(rid: int, method: str, params: list) -> dict:
-    return {"jsonrpc": "2.0", "id": rid, "method": method, "params": params}
-
-
-def reorder_by_id(responses: list) -> dict:
-    """Reordonne DETERMINISTE par id -> {id: (result, error)}."""
-    return {x["id"]: (x.get("result"), x.get("error")) for x in responses if isinstance(x, dict) and "id" in x}
-
-
-def batch_post(url: str, reqs: list, archive: list, max_retry: int = 4) -> dict | None:
-    """Envoie un batch (chunk <= BATCH_CHUNK gere par l'appelant). Retries transport archives. -> {id:(res,err)}."""
-    for attempt in range(max_retry):
-        try:
-            resp = requests.post(url, json=reqs, timeout=90).json()
-            if isinstance(resp, list) and len(resp) == len(reqs):
-                return reorder_by_id(resp)
-            archive.append({"attempt": attempt, "n_req": len(reqs),
-                            "error": f"reponse non-liste/incomplete ({type(resp).__name__})"})
-        except Exception as e:
-            archive.append({"attempt": attempt, "n_req": len(reqs), "error": f"{type(e).__name__}: {str(e)[:80]}"})
-        time.sleep(0.5 * (attempt + 1))
-    return None
-
-
-def batched(url: str, reqs: list, archive: list) -> dict:
-    """Decoupe en chunks <= BATCH_CHUNK, fusionne les {id:(res,err)}. Chunk en echec total -> ids absents."""
-    out = {}
-    for i in range(0, len(reqs), BATCH_CHUNK):
-        chunk = reqs[i:i + BATCH_CHUNK]
-        res = batch_post(url, chunk, archive)
-        if res is None:
-            archive.append({"chunk_offset": i, "error": "chunk en echec apres retries (ids absents -> NON_CONCLUANT)"})
-            continue
-        out.update(res)
-    return out
-
-
-# ----------------------------------------------------------------------------- override + calldatas (identiques v1)
 def overrides(bytecode: str) -> dict:
     return {FAKE: {"code": bytecode, "balance": hex(10 ** 24)},
             USDC: {"stateDiff": {mapping_slot(FAKE, USDC_SLOT): "0x" + HUGE.to_bytes(32, "big").hex()}}}
@@ -92,159 +62,107 @@ def _decode_anchor(res):
     return int.from_bytes(b[32:64], "big", signed=True), int.from_bytes(b[96:128], "big")
 
 
-def measure_batched(url: str, OV: dict, routes: list, blocks: list, sizes: list, dirs: list, archive: list) -> list:
-    """Mesure batchee (transport seul). Schema de record IDENTIQUE a v1. 2 rounds/bloc (R-A ; R-B getL1Fee)."""
+def measure_cycles(url, OV, routes, blocks, sizes, dirs, limiter, concurrency, archive):
+    """Mesure (fidelite corrigee) sous limiteur CUPS + concurrence bornee. concurrency=1 -> reference ;
+    K -> production. Schema record IDENTIQUE (route_hash/block/size_usd/direction/category[/champs ok]).
+    3 rounds/bloc : R1 getCode+getBlock+oracle ; R2 eth_call(exec)+estimateGas (cycles 2 pools presents) ;
+    R3 getL1Fee (cycles exec ok). Tous au MEME blockTag=b."""
     records = []
     for b in blocks:
         bhex = hex(b)
-        rid = 0
-        idmap = {}
-        reqs = []
-
-        def add(method, params, tag):
-            nonlocal rid
-            reqs.append(build_request(rid, method, params))
-            idmap[rid] = tag
-            rid += 1
-
-        pools = {}
+        # ---- R1 : presence (getCode par pool unique) + base_fee/timestamp + ancre ETH/USD ----
+        pools = []
         for r in routes:
-            for pool in (r["uni_pool"], r["slip_pool"]):
-                if pool not in pools:
-                    pools[pool] = ("code", pool)
-                    add("eth_getCode", [pool, bhex], ("code", pool))
-        add("eth_getBlockByNumber", [bhex, False], ("block",))
-        add("eth_call", [{"to": CHAINLINK_ETH_USD, "data": "0x" + SEL_LATESTROUNDDATA.hex()}, bhex], ("oracle",))
+            for p in (r["uni_pool"], r["slip_pool"]):
+                if p not in pools:
+                    pools.append(p)
+        r1_calls = [("eth_getCode", [p, bhex]) for p in pools]
+        r1_calls.append(("eth_getBlockByNumber", [bhex, False]))
+        r1_calls.append(("eth_call", [{"to": CHAINLINK_ETH_USD, "data": "0x" + SEL_LATESTROUNDDATA.hex()}, bhex]))
+        r1 = run_calls(url, r1_calls, limiter, concurrency, archive)
+        pstate = {p: pool_state(*r1[k]) for k, p in enumerate(pools)}
+        blk_res, blk_err, blk_infra = r1[len(pools)]
+        if blk_infra or blk_err is not None or blk_res is None:
+            bf = ts = None
+        else:
+            try:
+                bf = int(blk_res["baseFeePerGas"], 16) if blk_res.get("baseFeePerGas") else None
+                ts = int(blk_res["timestamp"], 16) if blk_res.get("timestamp") else None
+            except Exception:
+                bf = ts = None
+        orc_res, orc_err, orc_infra = r1[len(pools) + 1]
+        eth_usd = None if (orc_infra or orc_err is not None) else anchor_eth_usd(*_decode_anchor(orc_res), ts)
+        anchor_ok = eth_usd is not None and eth_usd > 0
+
+        # ---- cycles a executer = les deux pools PRESENTS (sinon classe directement infra/window) ----
         cyc = []
         for r in routes:
+            us, ss = pstate[r["uni_pool"]], pstate[r["slip_pool"]]
+            if us != "present" or ss != "present":
+                continue
             other = r["token1"] if Web3.to_checksum_address(r["token0"]) == USDC else r["token0"]
             for s in sizes:
                 for d in dirs:
-                    cd = exec_calldata(d, USDC, other, r["uni_fee"], r["slip_tickSpacing"], s * 10 ** 6)
-                    add("eth_call", [{"from": FROM, "to": FAKE, "data": "0x" + cd.hex()}, bhex, OV], ("call", r["route_hash"], s, d))
-                    add("eth_estimateGas", [{"from": FROM, "to": FAKE, "value": "0x0", "data": "0x" + cd.hex()}, bhex, OV], ("gas", r["route_hash"], s, d))
-                    cyc.append((r, other, s, d, cd))
-        resA = batched(url, reqs, archive)
-        ridA = {v: k for k, v in idmap.items()}   # tag -> id (tags uniques par bloc)
+                    cyc.append((r, other, s, d, exec_calldata(d, USDC, other, r["uni_fee"], r["slip_tickSpacing"], s * 10 ** 6)))
 
-        def getA(tag):
-            i = ridA.get(tag)
-            return resA.get(i, (None, "ID_ABSENT")) if i is not None else (None, "ID_ABSENT")
-
-        present = {p: bool((getA(("code", p))[0] or "0x") != "0x" and getA(("code", p))[0]) for p in pools}
-        blk_res, _ = getA(("block",))
-        try:
-            bf = int(blk_res["baseFeePerGas"], 16) if blk_res and blk_res.get("baseFeePerGas") else None
-            ts = int(blk_res["timestamp"], 16) if blk_res and blk_res.get("timestamp") else None
-        except Exception:
-            bf = ts = None
-        ans, upd = _decode_anchor(getA(("oracle",))[0])
-        eth_usd = anchor_eth_usd(ans, upd, ts)
-
-        # round B : getL1Fee pour les cycles dont l'eth_call est ok
-        reqsB, idmapB = [], {}
-        ridB = [0]
-
-        def addB(params, tag):
-            reqsB.append(build_request(ridB[0], "eth_call", params))
-            idmapB[tag] = ridB[0]; ridB[0] += 1
-
-        stage1 = {}
+        # ---- R2 : eth_call(exec) + estimateGas ----
+        r2_calls = []
         for (r, other, s, d, cd) in cyc:
-            pres = present.get(r["uni_pool"], False) and present.get(r["slip_pool"], False)
-            out_res, out_err = getA(("call", r["route_hash"], s, d))
-            est = classify(out_err) if out_err else ("ok" if out_res is not None else "rpcerror")
+            r2_calls.append(("eth_call", [{"from": FROM, "to": FAKE, "data": "0x" + cd.hex()}, bhex, OV]))
+            r2_calls.append(("eth_estimateGas", [{"from": FROM, "to": FAKE, "value": "0x0", "data": "0x" + cd.hex()}, bhex, OV]))
+        r2 = run_calls(url, r2_calls, limiter, concurrency, archive)
+
+        # ---- R3 : getL1Fee pour exec ok + estimateGas dispo + base_fee dispo ----
+        stage, r3_calls, r3_index = {}, [], {}
+        for ci, (r, other, s, d, cd) in enumerate(cyc):
+            out_res, out_err, out_infra = r2[2 * ci]
+            gas_res, gas_err, gas_infra = r2[2 * ci + 1]
+            est = exec_state(out_res, out_err, out_infra)
             gu = None
-            if est == "ok":
-                gres, gerr = getA(("gas", r["route_hash"], s, d))
-                if gres and not gerr and bf and bf > 0:
-                    gu = int(gres, 16)
-                    ser = serialize_dummy_1559(CHAIN_ID, gu, FAKE, cd, max(bf, 1) * 2, 10 ** 6)
-                    addB([{"to": GASORACLE, "data": "0x" + (SEL_GETL1FEE + abi_encode(["bytes"], [ser])).hex()}, bhex],
-                         (r["route_hash"], s, d))
-            stage1[(r["route_hash"], s, d)] = (pres, out_res, out_err, est, gu)
-        resB = batched(url, reqsB, archive) if reqsB else {}
+            if est == "ok" and not (gas_infra or gas_err is not None or gas_res is None) and bf and bf > 0:
+                gu = int(gas_res, 16)
+                ser = serialize_dummy_1559(CHAIN_ID, gu, FAKE, cd, max(bf, 1) * 2, 10 ** 6)
+                r3_index[(r["route_hash"], s, d)] = len(r3_calls)
+                r3_calls.append(("eth_call", [{"to": GASORACLE, "data": "0x" + (SEL_GETL1FEE + abi_encode(["bytes"], [ser])).hex()}, bhex]))
+            stage[(r["route_hash"], s, d)] = (out_res, out_err, est, gu)
+        r3 = run_calls(url, r3_calls, limiter, concurrency, archive) if r3_calls else []
 
-        for (r, other, s, d, cd) in cyc:
-            pres, out_res, out_err, est, gu = stage1[(r["route_hash"], s, d)]
-            l1 = None; gas_ok = False
-            if gu is not None:
-                lres, lerr = resB.get(idmapB.get((r["route_hash"], s, d)), (None, "ID_ABSENT"))
-                if lres and not lerr:
-                    l1 = int(lres, 16); gas_ok = True
-            anchor_ok = eth_usd is not None and eth_usd > 0
-            rec = {"route_hash": r["route_hash"], "block": b, "size_usd": s, "direction": d}
-            rec["category"] = classify_cycle(pres, est, anchor_ok, gas_ok)
-            if rec["category"] == "ok":
-                gnu = gas_normal_usdc(gas_normal_wei(gu, bf, l1), eth_usd)
-                rec.update({"out_usdc_6dec": int(out_res, 16), "gas_units_l2": gu, "base_fee_l2": bf,
-                            "l1_fee_wei": l1, "eth_usd": round(eth_usd, 4),
-                            "upper_bound_usd": round(upper_bound_usdc(int(out_res, 16), s * 10 ** 6, gnu), 6)})
-            elif rec["category"] == "CAPACITY":
-                rec["reason_raw"] = (out_err.get("message", "") if isinstance(out_err, dict) else str(out_err))[:140]
-            elif rec["category"] == "NON_CONCLUANT":
-                rec["reason_raw"] = ("ancre/gas manquant" if est == "ok"
-                                     else (out_err.get("message", "") if isinstance(out_err, dict) else str(out_err))[:140])
-            records.append(rec)
-    return records
-
-
-# ----------------------------------------------------------------------------- reference SEQUENTIELLE (v1-exacte)
-def measure_seq_ref(url: str, OV: dict, routes: list, blocks: list, sizes: list, dirs: list) -> list:
-    """Replique EXACTEMENT la sequence d'appels v1 (sequentielle), pour la comparaison byte-a-byte du benchmark."""
-    from d1_mev_boundary_control import raw_rpc
-    records, code_cache, block_cache = [], {}, {}
-    for r in routes:
-        other = r["token1"] if Web3.to_checksum_address(r["token0"]) == USDC else r["token0"]
-        for b in blocks:
-            bhex = hex(b)
-
-            def present_pool(pool):
-                k = (pool, b)
-                if k not in code_cache:
-                    c, _ = raw_rpc(url, "eth_getCode", [pool, bhex]); code_cache[k] = bool(c and c != "0x")
-                return code_cache[k]
-            pres = present_pool(r["uni_pool"]) and present_pool(r["slip_pool"])
-            if b not in block_cache:
-                blk, _ = raw_rpc(url, "eth_getBlockByNumber", [bhex, False])
-                try:
-                    bf = int(blk["baseFeePerGas"], 16) if blk and blk.get("baseFeePerGas") else None
-                    ts = int(blk["timestamp"], 16) if blk and blk.get("timestamp") else None
-                except Exception:
-                    bf = ts = None
-                ar, _ = raw_rpc(url, "eth_call", [{"to": CHAINLINK_ETH_USD, "data": "0x" + SEL_LATESTROUNDDATA.hex()}, bhex])
-                ans, upd = _decode_anchor(ar)
-                block_cache[b] = (bf, anchor_eth_usd(ans, upd, ts))
-            bf, eth_usd = block_cache[b]
+        # ---- classification finale (ordre deterministe routes x sizes x dirs) ----
+        for r in routes:
+            us, ss = pstate[r["uni_pool"]], pstate[r["slip_pool"]]
             for s in sizes:
                 for d in dirs:
+                    key = (r["route_hash"], s, d)
                     rec = {"route_hash": r["route_hash"], "block": b, "size_usd": s, "direction": d}
-                    if not pres:
-                        rec["category"] = "WINDOW_UNAVAILABLE"; records.append(rec); continue
-                    cd = exec_calldata(d, USDC, other, r["uni_fee"], r["slip_tickSpacing"], s * 10 ** 6)
-                    out_res, out_err = raw_rpc(url, "eth_call", [{"from": FROM, "to": FAKE, "data": "0x" + cd.hex()}, bhex, OV])
-                    est = classify(out_err) if out_err else ("ok" if out_res is not None else "rpcerror")
-                    gu = l1 = None; gas_ok = False
-                    if est == "ok":
-                        gres, gerr = raw_rpc(url, "eth_estimateGas", [{"from": FROM, "to": FAKE, "value": "0x0", "data": "0x" + cd.hex()}, bhex, OV])
-                        if gres and not gerr and bf and bf > 0:
-                            gu = int(gres, 16)
-                            ser = serialize_dummy_1559(CHAIN_ID, gu, FAKE, cd, max(bf, 1) * 2, 10 ** 6)
-                            lres, lerr = raw_rpc(url, "eth_call", [{"to": GASORACLE, "data": "0x" + (SEL_GETL1FEE + abi_encode(["bytes"], [ser])).hex()}, bhex])
-                            if lres and not lerr:
+                    if key not in stage:                                  # pool infra ou absent
+                        rec["category"] = classify_cycle2(us, ss, "infra", anchor_ok, False)
+                        if rec["category"] == CAT_INFRA:
+                            rec["reason_raw"] = "getCode infra (presence indeterminee, retry requis)"
+                        records.append(rec); continue
+                    out_res, out_err, est, gu = stage[key]
+                    l1 = None; gas_ok = False
+                    if est == "ok" and gu is not None:
+                        idx = r3_index.get(key)
+                        if idx is not None:
+                            lres, lerr, linfra = r3[idx]
+                            if not linfra and lerr is None and lres is not None:
                                 l1 = int(lres, 16); gas_ok = True
-                    anchor_ok = eth_usd is not None and eth_usd > 0
-                    rec["category"] = classify_cycle(pres, est, anchor_ok, gas_ok)
-                    if rec["category"] == "ok":
+                    rec["category"] = classify_cycle2(us, ss, est, anchor_ok, gas_ok)
+                    if rec["category"] == CAT_OK:
                         gnu = gas_normal_usdc(gas_normal_wei(gu, bf, l1), eth_usd)
                         rec.update({"out_usdc_6dec": int(out_res, 16), "gas_units_l2": gu, "base_fee_l2": bf,
                                     "l1_fee_wei": l1, "eth_usd": round(eth_usd, 4),
                                     "upper_bound_usd": round(upper_bound_usdc(int(out_res, 16), s * 10 ** 6, gnu), 6)})
-                    elif rec["category"] == "CAPACITY":
+                    elif rec["category"] == CAT_CAPACITY:
                         rec["reason_raw"] = (out_err.get("message", "") if isinstance(out_err, dict) else str(out_err))[:140]
-                    elif rec["category"] == "NON_CONCLUANT":
-                        rec["reason_raw"] = ("ancre/gas manquant" if est == "ok"
-                                             else (out_err.get("message", "") if isinstance(out_err, dict) else str(out_err))[:140])
+                    elif rec["category"] == CAT_INFRA:
+                        if est == "infra":
+                            rec["reason_raw"] = ((out_err.get("message", "") if isinstance(out_err, dict) else str(out_err))[:140]
+                                                 if out_err else "exec infra (pas de reponse)")
+                        elif not anchor_ok:
+                            rec["reason_raw"] = "oracle/ancre indisponible (infra)"
+                        else:
+                            rec["reason_raw"] = "gas/getL1Fee indisponible (infra)"
                     records.append(rec)
     return records
 
@@ -269,6 +187,8 @@ def provenance():
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lot", type=int, required=True)
+    ap.add_argument("--cups", type=float, default=CUPS_PROD, help="budget CU/s du limiteur (def: %d)" % CUPS_PROD)
+    ap.add_argument("--concurrency", type=int, default=CONCURRENCY_PROD, help="threads bornes (def: %d)" % CONCURRENCY_PROD)
     args = ap.parse_args()
     prov = provenance()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -279,8 +199,12 @@ def main() -> int:
     plan = json.load(open(cands[-1], encoding="utf-8")) if cands else None
     lot = plan["lots"][args.lot] if (plan and 0 <= args.lot < len(plan["lots"])) else None
     b_start, b_end, nb = window_blocks(B1)
-    manifest = {"phase": "D2B-2-v2-measure", "lot_index": args.lot, "transport": "JSON-RPC batch (semantique v1)",
-                "window": {"B1": B1, "b_start": b_start, "b_end": b_end, "n_blocks": nb},
+    manifest = {"phase": "D2B-2-v2-measure", "lot_index": args.lot,
+                "transport": "async borne + limiteur CUPS (token-bucket CU/s) ; plus de batch burst",
+                "throttle": {"cups": args.cups, "concurrency": args.concurrency},
+                "fidelite": "regle 3 corrigee : getCode echoue -> NON_CONCLUANT_INFRA ; WINDOW_UNAVAILABLE "
+                            "seulement si getCode=0x confirme ; oracle/gas/block/l1fee echoue -> INFRA, jamais gas=0",
+                "categories": CATEGORIES, "window": {"B1": B1, "b_start": b_start, "b_end": b_end, "n_blocks": nb},
                 "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), **prov}
     if lot is None:
         manifest["verdict"] = "NON_CONCLUANT"; manifest["reason"] = "plan/lot introuvable"
@@ -290,20 +214,28 @@ def main() -> int:
     bytecode = json.load(open(os.path.join(HERE, "contracts", "CrossProtocolExecutor.json"), encoding="utf-8"))["deployed_bytecode"]
     OV = overrides(bytecode)
     archive = []
-    records = measure_batched(url, OV, lot["routes"], list(range(b_start, b_end + 1)), SIZES_USD, ORIENTATIONS, archive)
-    cat = {"ok": 0, "CAPACITY": 0, "WINDOW_UNAVAILABLE": 0, "NON_CONCLUANT": 0}
+    limiter = CupsLimiter(args.cups)
+    records = measure_cycles(url, OV, lot["routes"], list(range(b_start, b_end + 1)), SIZES_USD, ORIENTATIONS,
+                             limiter, args.concurrency, archive)
+    cat = {c: 0 for c in CATEGORIES}
     for r in records:
         cat[r["category"]] = cat.get(r["category"], 0) + 1
-    raw = json.dumps({"lot": args.lot, "window": [b_start, b_end], "transport_errors": archive, "cycles": records}, ensure_ascii=False).encode()
+    infra = cat[CAT_INFRA]
+    verdict = "LOT_NON_CONCLUANT_RETRY_REQUIRED" if infra > 0 else "LOT_MESURE"
+    raw = json.dumps({"lot": args.lot, "window": [b_start, b_end], "throttle": {"cups": args.cups, "concurrency": args.concurrency},
+                      "transport_errors": archive, "cycles": records}, ensure_ascii=False).encode()
     raw_path = os.path.join(raw_dir, f"lot{args.lot:02d}_{stamp}.json")
     open(raw_path, "wb").write(raw)
     manifest.update({"categories_counts": cat, "cycles_traites": len(records), "transport_errors_count": len(archive),
                      "receipts": [{"name": f"lot{args.lot:02d}", "sha256": hashlib.sha256(raw).hexdigest(),
                                    "raw_path": os.path.relpath(raw_path, HERE).replace("\\", "/")}],
-                     "verdict": "LOT_MESURE" if cat["NON_CONCLUANT"] == 0 else "LOT_MESURE_AVEC_NON_CONCLUANTS"})
+                     "verdict": verdict,
+                     "note": ("NON_CONCLUANT_INFRA = echec transport/CUPS/oracle/gas apres retries -> lot ENTIER "
+                              "a re-run (jamais fusionne). LOT_MESURE seulement si 0 infra. Aucun verdict economique.")})
     json.dump(manifest, open(os.path.join(run_dir, "manifest.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-    print(json.dumps({"verdict": manifest["verdict"], "lot": args.lot, "cycles": len(records), "categories": cat,
-                      "transport_errors": len(archive), "run_dir": os.path.relpath(run_dir, HERE).replace("\\", "/")}, ensure_ascii=False, indent=2))
+    print(json.dumps({"verdict": verdict, "lot": args.lot, "cycles": len(records), "categories": cat,
+                      "transport_errors": len(archive), "run_dir": os.path.relpath(run_dir, HERE).replace("\\", "/")},
+                     ensure_ascii=False, indent=2))
     return 0
 
 
